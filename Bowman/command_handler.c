@@ -368,9 +368,12 @@ void *receive_frames(void *args) {
     Frame response_frame;
 
     while (!bowman_sigint_received) {
+
         if (receive_frame(*trf.poole_socket, &response_frame) <= 0) {
+            printF(RED, "ERROR\n");
             continue;   
         }
+
 
         if (!strncasecmp(response_frame.header_plus_data , "SONGS_RESPONSE", response_frame.header_length)) {
             //MATAR DOS PAJAROS DE UN TIRO :)
@@ -391,25 +394,57 @@ void *receive_frames(void *args) {
             strcpy(msg->msg_text, response_frame.header_plus_data);
             msg_queue_writer(msg_id, msg);
         }
-        else if (!strncasecmp(response_frame.header_plus_data , "NEW_FILE", response_frame.header_length)) {
-            //CREAR THREAD QUE EMPIEZE A GUARDAR EL FICHERO DE MUSICA
-            //GENERAR BUSTIA PARA EL FICHERO
-            //ENVIAR STRUCT CON LA INFORMACON NECESARIA
-            //EL THREAD IRA LEYENDO DE LA BUSTIA HASTA QUE TENGA TODOS LOS BYTES
-
-            printF(GREEN,"Data: %s\n", response_frame.header_plus_data + response_frame.header_length);
-
-            pthread_t new_file;
-            if (pthread_create(&new_file, NULL, startSongDownload, response_frame.header_plus_data + response_frame.header_length) != 0) {
-                perror("pthread_create");
-                exit(EXIT_FAILURE);
+        else if (!strncasecmp(response_frame.header_plus_data, "NEW_FILE", response_frame.header_length)) {
+            // Calcular la longitud de los datos y hacer una copia independiente
+            int data_length = strlen(response_frame.header_plus_data + response_frame.header_length) + 1;  // +1 para el carácter nulo
+            char* data_copy = malloc(data_length);
+            if (data_copy == NULL) {
+                perror("malloc");
+                continue; // Manejar el error adecuadamente
             }
-            
+            strcpy(data_copy, response_frame.header_plus_data + response_frame.header_length);
 
+            // Crear el hilo y pasarle la copia de los datos
+            pthread_t new_file;
+            if (pthread_create(&new_file, NULL, startSongDownload, data_copy) != 0) {
+                perror("pthread_create");
+                free(data_copy); // Liberar la memoria si falla pthread_create
+                continue; // Manejar el error adecuadamente
+            }
+            pthread_detach(new_file); // Usar pthread_detach si no necesitas esperar al hilo
         }
-        else if (!strncasecmp(response_frame.header_plus_data , "FILE_DATA", response_frame.header_length)) {
+        else if (!strncasecmp(response_frame.header_plus_data, "FILE_DATA", response_frame.header_length)) {
             
+            printF(GREEN, "Frame received -> %s\n", response_frame.header_plus_data);
+
+            int data_length = strlen(response_frame.header_plus_data + response_frame.header_length) + 1;
+            char* data_copy = malloc(data_length);
+            if (data_copy == NULL) {
+                perror("malloc");
+                continue; 
+            }
+            strcpy(data_copy, response_frame.header_plus_data + response_frame.header_length);
+
+            const char* inicio = strstr(data_copy, "FILE_DATA");
+            if (inicio != NULL) {
+                inicio += strlen("FILE_DATA"); 
+                char* datos = strdup(inicio);
+                if (datos != NULL) {
+                    Message_buffer msg;
+                    long id;
+                    strcpy(msg.msg_text, strchr(datos, '&'));
+                    id = atoi(datos);
+                    msg.msg_type = id;
+
+                    msg_queue_writer(msg_id, &msg);
+
+                    free(datos);
+                }
+            }
+
+            free(data_copy);
         }
+
         else if (!strncasecmp(response_frame.header_plus_data , "LOGOUT_OK", response_frame.header_length)) {
             printF(GREEN, "Logout successful\n");
             disconnect_notification_to_discovery(trf.username, trf.discovery_ip, trf.discovery_port);
@@ -509,18 +544,10 @@ void download(char *name){
 }
 
 void* startSongDownload(void* args){
+    
     char* str = (char*)args;  
 
-    char *fileName = strtok(str, "&");
-    char *fileSize = strtok(NULL, "&");
-    char *md5sum = strtok(NULL, "&");
-    char *id = strtok(NULL, "&");
-
-    
-    printF(WHITE,"%s\n", fileName);
-    printF(WHITE,"%s\n", fileSize);
-    printF(WHITE,"%s\n", md5sum);
-    printF(WHITE,"%s\n", id);
+    printF(RED, "startSongDownload rep -> %s", str);
 
     return NULL;
 }

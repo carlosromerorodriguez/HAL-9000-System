@@ -18,6 +18,7 @@ void* list_playlists_handler(void* args);
 char* searchSong(const char *basePath, const char *songName);   
 long getFileSize(const char *filePath);
 void* send_song(void * args);
+void empezar_envio(thread_args t_args,int id);
 
 /**
  * @brief Maneja la conexion con Bowman y el envio de comandos
@@ -476,7 +477,37 @@ void* send_song(void * args){
         return NULL;
     } 
 
-    
+    empezar_envio(*t_args, id);    
 
     return NULL;
+}
+
+void empezar_envio( thread_args t_args, int id) {
+
+    int num = 0;
+    char *id_char = intToStr(id);
+
+    
+    for(int i = 0; i < 10; i++){
+
+
+        char *num_envia = intToStr(num);
+
+        int length = snprintf(NULL, 0, "%s&%s", id_char, num_envia);
+        char *data = malloc(length + 1);
+        sprintf(data, "%s&%s", id_char, num_envia);
+
+        Frame new_data = frame_creator(0x04, "FILE_DATA", data);
+
+        if (send_frame(t_args.client_socket, &new_data) < 0) {
+            printF(RED, "Error sending FILE_DATA frame to %s.\n", t_args.username);
+            return;
+        } 
+
+        printF(YELLOW, "Sending frame...\n");
+
+        free(num_envia);
+        num++;
+    }
+
 }

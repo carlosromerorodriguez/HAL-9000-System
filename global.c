@@ -218,3 +218,18 @@ void msg_queue_delete(int msg_id) {
         printF(GREEN, "Message queue deleted successfully\n");
     }
 }
+
+char* intToStr(int num) {
+
+    int length = snprintf(NULL, 0, "%d", num) + 1;
+
+    char *str = (char *)malloc(length * sizeof(char));
+    if (str == NULL) {
+        perror("Error al asignar memoria");
+        return NULL; 
+    }
+
+    snprintf(str, length, "%d", num);
+
+    return str;
+}

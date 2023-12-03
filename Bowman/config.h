@@ -11,6 +11,13 @@ typedef struct {
     int discovery_port;
 } BowmanConfig;
 
+typedef struct {
+    char *fileName;
+    long fileSize;
+    char *md5Sum;
+    int id;
+} Song;
+
 /**
  * @brief Fill the Bowman configuration with the data from the file
  * 

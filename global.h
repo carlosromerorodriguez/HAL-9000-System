@@ -162,4 +162,12 @@ void msg_queue_reader(int msg_id, Message_buffer *message);
 */
 void msg_queue_delete(int msg_id);
 
+/**
+ * @brief Converts int to string
+ * 
+ * @param num num to convert
+ * 
+ * @return str
+*/
+char* intToStr(int num);
 #endif // !GLOBAL_H
