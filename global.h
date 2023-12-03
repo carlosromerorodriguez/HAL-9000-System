@@ -24,6 +24,9 @@
 #include <sys/dir.h>
 #include <sys/ipc.h>
 #include <sys/msg.h>
+#include <sys/stat.h>  
+#include <sys/wait.h> 
+
 
 //BOWMAN INCLUDES
 #include "Bowman/config.h"

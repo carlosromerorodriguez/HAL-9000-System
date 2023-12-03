@@ -8,8 +8,10 @@ typedef struct {
     int client_socket;
     char* username;
     char* server_directory;
+    char* song_name;
     pthread_t list_songs_thread;
     pthread_t list_playlists_thread;
+    pthread_t download_song_thread;
 } thread_args;
 
 /**

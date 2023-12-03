@@ -19,6 +19,8 @@ int logout(char *username);
 int disconnect_notification_to_discovery(char *username, char *discovery_ip, int discovery_port);
 void list_playlists();
 void *receive_frames(void *args);
+void download(char *name);
+void* startSongDownload(void* args);
 
 /**
  * @brief Parse the command to remove the extra spaces
@@ -176,11 +178,10 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
             }
             free(opcode);
             return EXIT_FAILURE;
-        } else if (!strcasecmp(opcode, "DOWNLOAD")) {
-            /* 
-                Handle the DOWNLOAD
-            */
-           printF(WHITE, "Download\n");
+        } else if (!strncasecmp(opcode, "DOWNLOAD", 8)) {
+
+            download(command + strlen("DOWNLOAD "));
+          
         } else if (!strcasecmp(opcode, "CHECK DOWNLOADS")) {
             /* 
                 Handle the CHECK DOWNLOADS
@@ -188,7 +189,7 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
            printF(WHITE, "Check downloads\n");
 
         } else if (!strcasecmp(opcode, "LIST SONGS")) {
-
+            
             list_songs();
 
         } else if (!strcasecmp(opcode, "LIST PLAYLISTS")) {
@@ -395,6 +396,16 @@ void *receive_frames(void *args) {
             //GENERAR BUSTIA PARA EL FICHERO
             //ENVIAR STRUCT CON LA INFORMACON NECESARIA
             //EL THREAD IRA LEYENDO DE LA BUSTIA HASTA QUE TENGA TODOS LOS BYTES
+
+            printF(GREEN,"Data: %s\n", response_frame.header_plus_data + response_frame.header_length);
+
+            pthread_t new_file;
+            if (pthread_create(&new_file, NULL, startSongDownload, response_frame.header_plus_data + response_frame.header_length) != 0) {
+                perror("pthread_create");
+                exit(EXIT_FAILURE);
+            }
+            
+
         }
         else if (!strncasecmp(response_frame.header_plus_data , "FILE_DATA", response_frame.header_length)) {
             
@@ -484,4 +495,32 @@ int disconnect_notification_to_discovery(char *username, char *discovery_ip, int
 
     close(sock);
     return EXIT_SUCCESS;
+}
+
+void download(char *name){
+
+    Frame download_frame = frame_creator(0x03, "DOWNLOAD_SONG", name);
+
+    if (send_frame(poole_socket, &download_frame) < 0) {
+        printF(RED, "Error sending DOWNLOAD_SONG frame to Poole server.\n");
+        return ;
+    } 
+
+}
+
+void* startSongDownload(void* args){
+    char* str = (char*)args;  
+
+    char *fileName = strtok(str, "&");
+    char *fileSize = strtok(NULL, "&");
+    char *md5sum = strtok(NULL, "&");
+    char *id = strtok(NULL, "&");
+
+    
+    printF(WHITE,"%s\n", fileName);
+    printF(WHITE,"%s\n", fileSize);
+    printF(WHITE,"%s\n", md5sum);
+    printF(WHITE,"%s\n", id);
+
+    return NULL;
 }

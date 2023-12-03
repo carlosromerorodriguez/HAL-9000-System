@@ -15,6 +15,9 @@ void get_playlists_and_songs_files_recursive(char *directory, char **playlists_l
 char* get_playlists_and_songs(char *directory);
 char *get_playlists_list(thread_args *t_args);
 void* list_playlists_handler(void* args);
+char* searchSong(const char *basePath, const char *songName);   
+long getFileSize(const char *filePath);
+void* send_song(void * args);
 
 /**
  * @brief Maneja la conexion con Bowman y el envio de comandos
@@ -80,6 +83,20 @@ void *client_handler(void* args) {
                 return NULL;
             } else {
                 pthread_join(t_args->list_songs_thread, NULL);
+            }
+        }
+        //DOWNLOAD SONG
+        else if(strncmp(request_frame.header_plus_data, "DOWNLOAD_SONG", request_frame.header_length) == 0) {
+            printF(YELLOW,"\nNew request - %s wants to download %s\n", t_args->username, request_frame.header_plus_data + request_frame.header_length);
+            printF(YELLOW,"Sending %s to %s\n", t_args->username, request_frame.header_plus_data + request_frame.header_length);
+
+            //Lanzar thread que gestione la descarga
+            t_args->song_name = request_frame.header_plus_data + request_frame.header_length;
+            if (pthread_create(&t_args->download_song_thread, NULL, send_song, (void *)t_args) != 0) {
+                printF(RED, "Error creating thread to list playlists.\n");
+                return NULL;
+            } else {
+                pthread_join(t_args->download_song_thread, NULL);
             }
         }
         //USER LOGOUT
@@ -326,4 +343,140 @@ void* list_playlists_handler(void* args) {
 
     free(playlist_list);
     pthread_exit(NULL);
+}
+
+char* searchSong(const char *basePath, const char *songName) {
+    struct dirent *dp;
+    DIR *dir = opendir(basePath);
+    char *path = NULL;
+
+    // Unable to open directory
+    if (!dir) {
+        return NULL;
+    }
+
+    while ((dp = readdir(dir)) != NULL) {
+        if (strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0) {
+            char newPath[1000];
+            struct stat statbuf;
+
+            // Construct new path from our base path
+            snprintf(newPath, sizeof(newPath), "%s/%s", basePath, dp->d_name);
+            stat(newPath, &statbuf);
+
+            if (S_ISDIR(statbuf.st_mode)) {
+                // If entry is a directory, recursively search it
+                path = searchSong(newPath, songName);
+            } else {
+                // If entry is a file, check if it's the song
+                if (strcmp(dp->d_name, songName) == 0) {
+                    path = strdup(newPath);
+                    break;
+                }
+            }
+        }
+
+        if (path) break;
+    }
+
+    closedir(dir);
+    return path;
+}
+
+char* getFileMD5(char *filePath) {
+    int pipefd[2];
+    pid_t pid;
+    char *md5sum = malloc(33);
+
+    if (md5sum == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return NULL;
+    }
+
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        free(md5sum);
+        return NULL;
+    }
+
+    pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        free(md5sum);
+        return NULL;
+    }
+
+    if (pid == 0) { 
+        close(pipefd[0]);
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[1]); 
+
+        execlp("md5sum", "md5sum", filePath, NULL);
+        _exit(EXIT_FAILURE);
+    } else {
+        close(pipefd[1]);
+
+        read(pipefd[0], md5sum, 32);
+        md5sum[32] = '\0';
+
+        close(pipefd[0]); 
+        wait(NULL);
+    }
+
+    return md5sum;
+}
+
+long getFileSize(const char *filePath) {
+    struct stat fileStat;
+
+    // Intenta obtenir informació sobre el fitxer
+    if (stat(filePath, &fileStat) == 0) {
+        // Retorna la mida del fitxer
+        return (long) fileStat.st_size;
+    } else {
+        // En cas d'error, retorna -1 (pots canviar a una altra gestió d'errors segons les teves necessitats)
+        perror("Error obtenint informació del fitxer");
+        return -1;
+    }
+}
+
+void* send_song(void * args){
+
+    thread_args *t_args = (thread_args *)args;
+
+    printF(GREEN, "Thread created -> sending %s\n", t_args->song_name);
+
+    int newPathLength = strlen("..") + strlen(t_args->server_directory) + 1;
+    char *newPath = malloc(newPathLength);
+
+    strcpy(newPath, "..");
+    strcat(newPath, t_args->server_directory);
+
+    char *path = searchSong(newPath, t_args->song_name);
+    if (path) {
+        printF(GREEN,"Found: %s\n", path);
+    } else {
+        printF(RED,"Song not found.\n");
+        return NULL;
+    }
+
+    char *md5sum = getFileMD5(path);
+    long file_size = getFileSize(path);
+    char *file_name = t_args->song_name;
+    int id = ftok(path, 1);
+
+    int length = snprintf(NULL, 0, "%s&%lu&%s&%d", file_name, file_size, md5sum, id);
+    char *data = malloc(length + 1);
+    sprintf(data, "%s&%lu&%s&%d", file_name, file_size, md5sum, id);
+
+    Frame new_song = frame_creator(0x04, "NEW_FILE", data);
+
+    if (send_frame(t_args->client_socket, &new_song) < 0) {
+        printF(RED, "Error sending NEW_FILE frame to %s.\n", t_args->username);
+        return NULL;
+    } 
+
+    
+
+    return NULL;
 }
