@@ -334,9 +334,18 @@ void list_songs() {
         return;
     } 
 
-    printF(GREEN, "List songs sent to Poole server.\n");
-    //Leer de la cola de mensajes la respuesta del servidor Poole
+    //Leer el tamaño del mensaje a mostrar de la cola de mensajes
     Message_buffer *msg = malloc(sizeof(Message_buffer));
+    memset(msg, 0, sizeof(Message_buffer));
+    msg->msg_type = 1;
+    msg_queue_reader(msg_id, msg);
+    printF(GREEN, "Tamaño del fichero: %s\n", msg->msg_text);
+
+    //APLICAR EXCLUSIÓN MUTUA
+    sleep(0.2);
+    //Leer de la cola de mensajes la respuesta del servidor Poole
+    memset(msg, 0, sizeof(Message_buffer));
+    msg = malloc(sizeof(Message_buffer));
     msg->msg_type = 1;
     msg_queue_reader(msg_id, msg);
     printF(GREEN, "Message received 340: %s\n", msg->msg_text);
@@ -361,25 +370,37 @@ void list_playlists() {
     //TODO: BUCLE ESPERANDO A COMPLETAR LOS BYTES TOTALES QUE ENVÍA POOLE
     msg_queue_reader(msg_id, msg);
     printF(GREEN, "Message received 359: %s\n", msg->msg_text);
+
+    free(msg);
 }
 
 void *receive_frames(void *args) {
     thread_receive_frames trf = *(thread_receive_frames *)args;
     Frame response_frame;
+    Message_buffer *msg = malloc(sizeof(Message_buffer));
 
     while (!bowman_sigint_received) {
-
         if (receive_frame(*trf.poole_socket, &response_frame) <= 0) {
-            printF(RED, "ERROR\n");
             continue;   
         }
+        //RECIBIR EL TAMAÑO DE LIST_SONGS A MOSTRAR
+        if (!strncasecmp(response_frame.header_plus_data , "LIST_SONGS_SIZE", response_frame.header_length)) {
+            printf("\nList Songs Size: %s\n", response_frame.header_plus_data + response_frame.header_length);
+            printf("Size: %d\n", atoi(response_frame.header_plus_data + response_frame.header_length));
 
-
-        if (!strncasecmp(response_frame.header_plus_data , "SONGS_RESPONSE", response_frame.header_length)) {
+            msg = malloc(sizeof(Message_buffer));
+            memset(msg, 0, sizeof(Message_buffer));
+            msg->msg_type = 1;
+            strncpy(msg->msg_text, response_frame.header_plus_data + response_frame.header_length, HEADER_MAX_SIZE);
+            msg->msg_text[HEADER_MAX_SIZE] = '\0';
+            msg_queue_writer(msg_id, msg);
+        }
+        else if (!strncasecmp(response_frame.header_plus_data , "SONGS_RESPONSE", response_frame.header_length)) {
             //MATAR DOS PAJAROS DE UN TIRO :)
-            printF(GREEN, "\nSongs Response: %s\n", response_frame.header_plus_data);
-            printF(GREEN, "\nTamaño de la trama: %d\n", strlen(response_frame.header_plus_data));
-            Message_buffer *msg = malloc(sizeof(Message_buffer));
+            //printF(GREEN, "\nSongs Response: %s\n", response_frame.header_plus_data);
+            //printF(GREEN, "\nTamaño de la trama: %d\n", strlen(response_frame.header_plus_data));
+            msg = malloc(sizeof(Message_buffer));
+            memset(msg, 0, sizeof(Message_buffer));
             msg->msg_type = 1;
             memset(msg->msg_text, 0, sizeof(msg->msg_text));
             strcpy(msg->msg_text, response_frame.header_plus_data);
@@ -388,7 +409,8 @@ void *receive_frames(void *args) {
         else if (!strncasecmp(response_frame.header_plus_data , "PLAYLISTS_RESPONSE", response_frame.header_length)) {
             printF(GREEN, "\nPlaylists Response: %s\n", response_frame.header_plus_data);
             printF(GREEN, "\nTamaño de la trama: %d\n", strlen(response_frame.header_plus_data));
-            Message_buffer *msg = malloc(sizeof(Message_buffer));
+            msg = malloc(sizeof(Message_buffer));
+            memset(msg, 0, sizeof(Message_buffer));
             msg->msg_type = 2;
             memset(msg->msg_text, 0, sizeof(msg->msg_text));
             strcpy(msg->msg_text, response_frame.header_plus_data);
@@ -399,18 +421,18 @@ void *receive_frames(void *args) {
             int data_length = strlen(response_frame.header_plus_data + response_frame.header_length) + 1;
             char* data_copy = malloc(data_length);
             if (data_copy == NULL) {
-                perror("malloc");
+                printF(RED, "Malloc\n");
                 continue; 
             }
             strcpy(data_copy, response_frame.header_plus_data + response_frame.header_length);
 
             pthread_t new_file;
             if (pthread_create(&new_file, NULL, startSongDownload, data_copy) != 0) {
-                perror("pthread_create");
+                printF(RED, "Pthread_create\n");
                 free(data_copy); 
                 continue; 
             }
-            pthread_detach(new_file); 
+            //pthread_detach(new_file); 
         }
         else if (!strncasecmp(response_frame.header_plus_data, "FILE_DATA", response_frame.header_length)) {
 

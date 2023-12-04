@@ -195,8 +195,9 @@ void msg_queue_writer(int msg_id, Message_buffer *message) {
         return;
     }
     
-    if (msgsnd(msg_id, message, sizeof(message->msg_text), 0) == -1) {
-        printF(RED, "msgsnd error\n");
+    size_t msg_size = sizeof(Message_buffer) - sizeof(long);
+    if (msgsnd(msg_id, message, msg_size, 0) == -1) {
+        printF(RED, "msgsnd error: %s\n", strerror(errno));
     }
 }
 
@@ -206,10 +207,11 @@ void msg_queue_reader(int msg_id, Message_buffer *message) {
         return;
     }
 
-    if (msgrcv(msg_id, message, sizeof(message->msg_text), message->msg_type, 0) == -1) {
-        printF(RED, "msgrcv error\n");
+    if (msgrcv(msg_id, message, sizeof(Message_buffer) - sizeof(long), 0, 0) == -1) {
+        printF(RED, "msgrcv error: %s\n", strerror(errno));
     }
 }
+
 
 void msg_queue_delete(int msg_id) {
     if (msgctl(msg_id, IPC_RMID, NULL) == -1) {
