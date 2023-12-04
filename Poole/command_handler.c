@@ -490,7 +490,6 @@ void empezar_envio( thread_args t_args, int id) {
     
     for(int i = 0; i < 10; i++){
 
-
         char *num_envia = intToStr(num);
 
         int length = snprintf(NULL, 0, "%s&%s", id_char, num_envia);
@@ -508,6 +507,9 @@ void empezar_envio( thread_args t_args, int id) {
 
         free(num_envia);
         num++;
+
     }
+
+    printF(GREEN, "File completed!\n");
 
 }

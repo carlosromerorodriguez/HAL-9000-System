@@ -14,7 +14,7 @@ typedef struct {
 typedef struct {
     char *fileName;
     long fileSize;
-    char *md5Sum;
+    char *md5sum;
     int id;
 } Song;
 
