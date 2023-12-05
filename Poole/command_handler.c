@@ -342,6 +342,22 @@ void* list_playlists_handler(void* args) {
     int offset = 0;
     char data_segment[HEADER_MAX_SIZE]; // 253 bytes
 
+    //MANDAR EL TAMAÑO DE LA LISTA DE CANCIONES AL CLIENTE
+    printF(YELLOW, "Playlist length: %d\n", list_length);
+
+    char list_length_str[HEADER_MAX_SIZE - strlen("PLAYLISTS_SONGS_SIZE")];
+    memset(list_length_str, 0, HEADER_MAX_SIZE - strlen("PLAYLISTS_SONGS_SIZE"));
+    snprintf(list_length_str, sizeof(list_length_str), "%d", list_length);
+
+    Frame list_length_frame = frame_creator(0x02, "PLAYLISTS_SONGS_SIZE", list_length_str);
+    if (send_frame(t_args->client_socket, &list_length_frame) < 0) {
+        printF(RED, "Error sending list length frame to Bowman.\n");
+        free(playlist_list);
+        return NULL;
+    }
+
+    usleep(100000); // 100ms
+
     while (offset < list_length) {
         int data_length = (list_length - offset > HEADER_MAX_SIZE - 1) ? HEADER_MAX_SIZE - 1 : list_length - offset;
         memset(data_segment, 0, HEADER_MAX_SIZE);

@@ -379,7 +379,6 @@ void list_playlists() {
 void *receive_frames(void *args) {
     thread_receive_frames trf = *(thread_receive_frames *)args;
     Frame response_frame;
-    Message_buffer *msg = malloc(sizeof(Message_buffer));
 
     while (!bowman_sigint_received) {
         if (receive_frame(*trf.poole_socket, &response_frame) <= 0) {
@@ -387,21 +386,21 @@ void *receive_frames(void *args) {
         }
         //RECIBIR EL TAMAÑO DE LIST_SONGS A MOSTRAR
         if (!strncasecmp(response_frame.header_plus_data , "LIST_SONGS_SIZE", response_frame.header_length)) {
-            printf("\nList Songs Size: %s\n", response_frame.header_plus_data + response_frame.header_length);
-            printf("Size: %d\n", atoi(response_frame.header_plus_data + response_frame.header_length));
-
-            msg = malloc(sizeof(Message_buffer));
+            //printf("\nList Songs Size: %s\n", response_frame.header_plus_data + response_frame.header_length);
+            //printf("Size: %d\n", atoi(response_frame.header_plus_data + response_frame.header_length));
+            Message_buffer *msg = malloc(sizeof(Message_buffer));
             memset(msg, 0, sizeof(Message_buffer));
             msg->msg_type = 1;
             strncpy(msg->msg_text, response_frame.header_plus_data + response_frame.header_length, HEADER_MAX_SIZE);
             msg->msg_text[HEADER_MAX_SIZE] = '\0';
+            printF(GREEN, "Message received 398: %s\n", msg->msg_text);
             msg_queue_writer(msg_id, msg);
         }
         else if (!strncasecmp(response_frame.header_plus_data , "SONGS_RESPONSE", response_frame.header_length)) {
             //MATAR DOS PAJAROS DE UN TIRO :)
             //printF(GREEN, "\nSongs Response: %s\n", response_frame.header_plus_data);
             //printF(GREEN, "\nTamaño de la trama: %d\n", strlen(response_frame.header_plus_data));
-            msg = malloc(sizeof(Message_buffer));
+            Message_buffer *msg = malloc(sizeof(Message_buffer));
             memset(msg, 0, sizeof(Message_buffer));
             msg->msg_type = 1;
             memset(msg->msg_text, 0, sizeof(msg->msg_text));
@@ -409,11 +408,11 @@ void *receive_frames(void *args) {
             msg_queue_writer(msg_id, msg);
         }
         else if (!strncasecmp(response_frame.header_plus_data , "PLAYLISTS_RESPONSE", response_frame.header_length)) {
-            printF(GREEN, "\nPlaylists Response: %s\n", response_frame.header_plus_data);
-            printF(GREEN, "\nTamaño de la trama: %d\n", strlen(response_frame.header_plus_data));
-            msg = malloc(sizeof(Message_buffer));
+            //printF(GREEN, "\nPlaylists Response: %s\n", response_frame.header_plus_data);
+            //printF(GREEN, "\nTamaño de la trama: %d\n", strlen(response_frame.header_plus_data));
+            Message_buffer *msg = malloc(sizeof(Message_buffer));
             memset(msg, 0, sizeof(Message_buffer));
-            msg->msg_type = 2;
+            msg->msg_type = 4;
             memset(msg->msg_text, 0, sizeof(msg->msg_text));
             strcpy(msg->msg_text, response_frame.header_plus_data);
             msg_queue_writer(msg_id, msg);
