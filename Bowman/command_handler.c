@@ -339,16 +339,18 @@ void list_songs() {
     memset(msg, 0, sizeof(Message_buffer));
     msg->msg_type = 1;
     msg_queue_reader(msg_id, msg);
-    printF(GREEN, "Tamaño del fichero: %s\n", msg->msg_text);
-
+    printF(GREEN, "Tamaño del fichero: %d\n", atoi(msg->msg_text));
+    int size_fichero = atoi(msg->msg_text);
     //APLICAR EXCLUSIÓN MUTUA
-    sleep(0.2);
     //Leer de la cola de mensajes la respuesta del servidor Poole
-    memset(msg, 0, sizeof(Message_buffer));
-    msg = malloc(sizeof(Message_buffer));
-    msg->msg_type = 1;
-    msg_queue_reader(msg_id, msg);
-    printF(GREEN, "Message received 340: %s\n", msg->msg_text);
+    while(size_fichero > 0){
+        msg = malloc(sizeof(Message_buffer));
+        memset(msg, 0, sizeof(Message_buffer));
+        msg->msg_type = 1;
+        msg_queue_reader(msg_id, msg);
+        printF(GREEN, "Message received 340: %s\n", msg->msg_text);
+        size_fichero -= strlen(msg->msg_text);
+    }
 }
 
 /**
