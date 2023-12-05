@@ -128,17 +128,22 @@ void display_loading_spinner(int color, int duration) {
 */
 Frame frame_creator(char type, char* header, char* data) {
     Frame frame;
-    memset(&frame, 0, sizeof(frame));  // Padding initialization to zeros
+    memset(&frame, 0, sizeof(frame));  
 
     frame.type = type;
     frame.header_length = strlen(header);
 
-    snprintf(frame.header_plus_data, frame.header_length + 1, "%s", header);
-
-    snprintf(frame.header_plus_data + frame.header_length, HEADER_MAX_SIZE - frame.header_length, "%s", data);
+    if (strcmp(header, "FILE_DATA") == 0) {
+        memcpy(frame.header_plus_data, header, frame.header_length);
+        memcpy(frame.header_plus_data + frame.header_length, data, HEADER_MAX_SIZE - frame.header_length);
+    } else {
+        snprintf(frame.header_plus_data, frame.header_length + 1, "%s", header);
+        snprintf(frame.header_plus_data + frame.header_length, HEADER_MAX_SIZE - frame.header_length, "%s", data);
+    }
 
     return frame;
 }
+
 
 /**
  * @brief Sends a frame through a socket

@@ -18,7 +18,7 @@ void* list_playlists_handler(void* args);
 char* searchSong(const char *basePath, const char *songName);   
 long getFileSize(const char *filePath);
 void* send_song(void * args);
-void empezar_envio(thread_args t_args,int id);
+void empezar_envio(thread_args t_args,int id, char* path, long file_size);
 
 /**
  * @brief Maneja la conexion con Bowman y el envio de comandos
@@ -492,39 +492,58 @@ void* send_song(void * args){
         return NULL;
     } 
 
-    empezar_envio(*t_args, id);    
+    empezar_envio(*t_args, id, path, file_size);    
 
     return NULL;
 }
 
-void empezar_envio( thread_args t_args, int id) {
-
-    int num = 0;
+void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
     char *id_char = intToStr(id);
+    int id_length = strlen(id_char);
+    int max_buffer_size = 253 - 9 - 1 - id_length; 
 
-    
-    for(int i = 0; i < 10; i++){
+    int fd = open(path, O_RDONLY);
+    if (fd < 0) {
+        printF(RED, "Error opening file\n");
+        return;
+    }
 
-        char *num_envia = intToStr(num);
+    long total_bytes_sent = 0;
 
-        int length = snprintf(NULL, 0, "%s&%s", id_char, num_envia);
-        char *data = malloc(length + 1);
-        sprintf(data, "%s&%s", id_char, num_envia);
+    while (total_bytes_sent < file_size) {
+        long current_buffer_size = (file_size - total_bytes_sent > max_buffer_size) ? max_buffer_size : (file_size - total_bytes_sent);
+        char *buffer = malloc(sizeof(char) * current_buffer_size);
 
-        Frame new_data = frame_creator(0x04, "FILE_DATA", data);
-
-        if (send_frame(t_args.client_socket, &new_data) < 0) {
-            printF(RED, "Error sending FILE_DATA frame to %s.\n", t_args.username);
+        int bytes_read = read(fd, buffer, current_buffer_size);
+        if (bytes_read < 0) {
+            printF(RED, "Error reading file\n");
+            free(buffer);
+            close(fd);
             return;
-        } 
+        }
 
-        printF(YELLOW, "Sending frame...\n");
+        char *data = malloc(sizeof(char) * (id_length + sizeof(char) + bytes_read));
+        memcpy(data, id_char, id_length);
+        data[id_length] = '&';
+        memcpy(data + id_length + 1, buffer, bytes_read);
 
-        free(num_envia);
-        num++;
+        Frame file_data = frame_creator(0x04, "FILE_DATA", data); 
 
+        if (send_frame(t_args.client_socket, &file_data) < 0) {
+            printF(RED, "Error sending FILE_DATA frame to %s.\n", t_args.username);
+            free(data);
+            free(buffer);
+            close(fd);
+            return;
+        }
+
+        total_bytes_sent += bytes_read;
+        printF(RED, "%ld / %ld\n", total_bytes_sent, file_size);
+        free(data);
+        free(buffer);
     }
 
     printF(GREEN, "File completed!\n");
-
+    close(fd);
 }
+

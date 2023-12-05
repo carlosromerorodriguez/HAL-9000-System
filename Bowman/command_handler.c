@@ -450,8 +450,9 @@ void *receive_frames(void *args) {
                 Message_buffer msg;
                 long id;
                 char* ampersand = strchr(datos, '&');
+                ampersand = ampersand + 1;
                 if (ampersand != NULL) {
-                    strcpy(msg.msg_text, ampersand + 1); 
+                    strcpy(msg.msg_text, ampersand); 
                 }
                 id = atoi(datos);
                 msg.msg_type = id;
@@ -594,21 +595,44 @@ void parseSongInfo(const char *str, Song *song) {
     free(tempStr);
 }
 
-void* startSongDownload(void* args){
-    
+void* startSongDownload(void* args) {
     char* str = (char*)args; 
 
     Song newSong;
     parseSongInfo(str, &newSong); 
 
-    Message_buffer *msg = malloc(sizeof(Message_buffer));
-    msg->msg_type = newSong.id;
+    long fileSize = newSong.fileSize;
 
-    printF(RED, "Recibiendo mensajes %ld\n", msg->msg_type);
-    for(int i = 0; i < 10; i ++){
-        msg_queue_reader(msg_id, msg);
-        printF(RED, "mensaje recivido -> %s\n", msg->msg_text);
+    int fd = open(newSong.fileName, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd < 0) {
+        perror("Error opening file");
+        return NULL;
     }
+
+    Message_buffer *msg = malloc(sizeof(Message_buffer));
+    msg->msg_type = 2;
+
+    long total_bytes_written = 0;
+    
+    while (total_bytes_written < fileSize) {
+
+        msg_queue_reader(msg_id, msg);
+
+        printF(RED, "Escribimos -> %s\n", msg->msg_text);
+
+        int written = write(fd, msg->msg_text, sizeof(msg->msg_text));
+        if (written < 0) {
+            perror("Error writing to file");
+            break;
+        }
+        total_bytes_written += written;
+        //printF(RED ,"%ld / %ld", total_bytes_written , fileSize);
+    }
+
+    printF(GREEN, "\nDescarrega completada\n");
+    close(fd);
+    free(msg);
 
     return NULL;
 }
+
