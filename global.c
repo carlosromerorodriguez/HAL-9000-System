@@ -129,7 +129,7 @@ void display_loading_spinner(int color, int duration) {
 Frame frame_creator(char type, char* header, char* data) {
     Frame frame;
     memset(&frame, 0, sizeof(frame));  
-
+    
     frame.type = type;
     frame.header_length = strlen(header);
 

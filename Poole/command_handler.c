@@ -458,13 +458,13 @@ char* getFileMD5(char *filePath) {
     return md5sum;
 }
 
-long getFileSize(const char *filePath) {
+off_t getFileSize(const char *filePath) {
     struct stat fileStat;
 
     // Intenta obtenir informació sobre el fitxer
     if (stat(filePath, &fileStat) == 0) {
         // Retorna la mida del fitxer
-        return (long) fileStat.st_size;
+        return fileStat.st_size;
     } else {
         // En cas d'error, retorna -1 (pots canviar a una altra gestió d'errors segons les teves necessitats)
         perror("Error obtenint informació del fitxer");
@@ -489,11 +489,11 @@ void* send_song(void * args){
         printF(GREEN,"Found: %s\n", path);
     } else {
         printF(RED,"Song not found.\n");
-        return NULL;
+        pthread_exit(NULL);
     }
 
     char *md5sum = getFileMD5(path);
-    long file_size = getFileSize(path);
+    off_t file_size = getFileSize(path);
     char *file_name = t_args->song_name;
     int id = ftok(path, 1);
 
@@ -505,12 +505,12 @@ void* send_song(void * args){
 
     if (send_frame(t_args->client_socket, &new_song) < 0) {
         printF(RED, "Error sending NEW_FILE frame to %s.\n", t_args->username);
-        return NULL;
+        pthread_exit(NULL);
     } 
 
     empezar_envio(*t_args, id, path, file_size);    
 
-    return NULL;
+    pthread_exit(NULL);
 }
 
 void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
@@ -527,8 +527,14 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
     long total_bytes_sent = 0;
 
     while (total_bytes_sent < file_size) {
-        long current_buffer_size = (file_size - total_bytes_sent > max_buffer_size) ? max_buffer_size : (file_size - total_bytes_sent);
+        long current_buffer_size = (file_size - total_bytes_sent > HEADER_MAX_SIZE) ? HEADER_MAX_SIZE : (file_size - total_bytes_sent);
         char *buffer = malloc(sizeof(char) * current_buffer_size);
+        if (!buffer) {
+            printF(RED, "Error allocating memory for buffer\n");
+            close(fd);
+            return;
+        }
+
 
         int bytes_read = read(fd, buffer, current_buffer_size);
         if (bytes_read < 0) {
@@ -544,7 +550,6 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
         memcpy(data + id_length + 1, buffer, bytes_read);
 
         Frame file_data = frame_creator(0x04, "FILE_DATA", data); 
-
         if (send_frame(t_args.client_socket, &file_data) < 0) {
             printF(RED, "Error sending FILE_DATA frame to %s.\n", t_args.username);
             free(data);
