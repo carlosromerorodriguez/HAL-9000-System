@@ -24,9 +24,13 @@ void* startSongDownload(void* args);
 //Handle List songs
 void handleListSongsSize(char* data);
 void handleSongsResponse(char *data);
+int countSongs(const char *str);
 //Handle List playlists
 void handleListPlaylistsSize(char *data);
 void handlePlaylistsResponse(char *data);
+int countPlaylists(const char *str);
+void print_playlists(char *to_print);
+void printSongsInPlaylists(char *playlist, char playlistIndex);
 //Handle downloads
 void handleNewFile(char* data);
 void handleFileData(char* data);
@@ -343,23 +347,78 @@ void list_songs() {
         return;
     } 
 
-    //Leer el tamaño del mensaje a mostrar de la cola de mensajes
+    // Leer el tamaño del mensaje a mostrar de la cola de mensajes
     Message_buffer *msg = malloc(sizeof(Message_buffer));
+    if (!msg) {
+        printF(RED, "Error allocating memory for message buffer.\n");
+        return;
+    }
     memset(msg, 0, sizeof(Message_buffer));
     msg->msg_type = 1;
     msg_queue_reader(msg_id, msg);
-    printF(GREEN, "Tamaño del fichero: %d\n", atoi(msg->msg_text));
     int size_fichero = atoi(msg->msg_text);
-    //APLICAR EXCLUSIÓN MUTUA
-    //Leer de la cola de mensajes la respuesta del servidor Poole
+    free(msg); 
+
+    // APLICAR EXCLUSIÓN MUTUA
+    // Leer de la cola de mensajes la respuesta del servidor Poole
+    usleep(200000);
+    char *to_print = malloc(sizeof(char));  // Se inicializa con un tamaño de 1 para el carácter nulo
+    if (!to_print) {
+        printF(RED, "Error allocating memory for to_print.\n");
+        return;
+    }
+    to_print[0] = '\0';  // Asegurar cadena vacía
+
     while(size_fichero > 0){
         msg = malloc(sizeof(Message_buffer));
+        if (!msg) {
+            printF(RED, "Error allocating memory for message buffer.\n");
+            free(to_print);
+            return;
+        }
         memset(msg, 0, sizeof(Message_buffer));
         msg->msg_type = 1;
         msg_queue_reader(msg_id, msg);
-        printF(GREEN, "Message received 340: %s\n", msg->msg_text);
-        size_fichero -= strlen(msg->msg_text);
+
+        size_t old_size = strlen(to_print);
+        size_t new_size = old_size + strlen(msg->msg_text) + 1;
+        char *temp = realloc(to_print, new_size);
+        if (!temp) {
+            printF(RED, "Error reallocating memory for to_print.\n");
+            free(msg);
+            free(to_print);
+            return;
+        }
+        to_print = temp;
+        strcat(to_print, msg->msg_text);
+        
+        size_fichero -= strlen(msg->msg_text) + strlen("SONGS_RESPONSE");        
+        free(msg);
     }
+
+    // Imprimir el número total de canciones
+    printF(GREEN, "There are %d songs available for download:\n", countSongs(to_print));
+
+    // Presentar la lista de canciones
+    char *token = strtok(to_print, "&");
+    int index = 1;
+    while (token != NULL) {
+        printF(GREEN, "%d. %s\n", index, token);
+        token = strtok(NULL, "&");
+        index++;
+    }
+
+    free(to_print);
+}
+
+int countSongs(const char *str) {
+    int count = 0;
+    const char *temp = str;
+    while (*temp) {
+        if (*temp == '&') count++;
+        temp++;
+    }
+    return count + 1;
 }
 
 /**
@@ -370,26 +429,116 @@ void list_songs() {
 void list_playlists() {
     Frame playlists_frame = frame_creator(0x02, "LIST_PLAYLISTS", "");
 
+    // Enviar la trama al servidor Poole
     if (send_frame(poole_socket, &playlists_frame) < 0) {
-        printF(RED, "Error sending LIST_PLAYLISTS frame to Poole server.\n");
+        printF(RED, "Error sending LIST_SONGS frame to Poole server.\n");
         return;
     } 
-    //Leer de la cola de mensajes la respuesta del servidor Poole
+
+    // Leer el tamaño del mensaje a mostrar de la cola de mensajes
     Message_buffer *msg = malloc(sizeof(Message_buffer));
-    msg->msg_type = 2;
-
-    //TODO: BUCLE ESPERANDO A COMPLETAR LOS BYTES TOTALES QUE ENVÍA POOLE
+    if (!msg) {
+        printF(RED, "Error allocating memory for message buffer.\n");
+        return;
+    }
+    memset(msg, 0, sizeof(Message_buffer));
+    msg->msg_type = 1;
     msg_queue_reader(msg_id, msg);
-    printF(GREEN, "Message received 359: %s\n", msg->msg_text);
+    int size_fichero = atoi(msg->msg_text);
+    free(msg); 
 
-    free(msg);
+    // APLICAR EXCLUSIÓN MUTUA
+    // Leer de la cola de mensajes la respuesta del servidor Poole
+    usleep(200000);
+    char *to_print = malloc(sizeof(char));  // Se inicializa con un tamaño de 1 para el carácter nulo
+    if (!to_print) {
+        printF(RED, "Error allocating memory for to_print.\n");
+        return;
+    }
+    to_print[0] = '\0';  // Asegurar cadena vacía
+
+    while(size_fichero > 0){
+        msg = malloc(sizeof(Message_buffer));
+        if (!msg) {
+            printF(RED, "Error allocating memory for message buffer.\n");
+            free(to_print);
+            return;
+        }
+        memset(msg, 0, sizeof(Message_buffer));
+        msg->msg_type = 1;
+        msg_queue_reader(msg_id, msg);
+
+        size_t old_size = strlen(to_print);
+        size_t new_size = old_size + strlen(msg->msg_text) + 1;
+        char *temp = realloc(to_print, new_size);
+        if (!temp) {
+            printF(RED, "Error reallocating memory for to_print.\n");
+            free(msg);
+            free(to_print);
+            return;
+        }
+        to_print = temp;
+        strcat(to_print, msg->msg_text);
+        
+        size_fichero -= strlen(msg->msg_text) + strlen("PLAYLISTS_RESPONSE");        
+        free(msg);
+    }
+    
+    printF(GREEN, "There are %d playlists available for download:\n", countPlaylists(to_print));
+
+    char *temp = strdup(to_print + 1);
+    print_playlists(temp);
+
+    free(temp);
+    free(to_print);
+}
+
+int countPlaylists(const char *str) {
+    int count = 0;
+    const char *temp = str;
+    while (*temp) {
+        if (*temp == '#') count++;
+        temp++;
+    }
+    return count;
+}
+
+void printSongsInPlaylists(char *playlist, char playlistIndex) {
+    char *saveptr1;
+    
+    // El primer token será el nombre de la playlist.
+    char *name = strtok_r(playlist, "&", &saveptr1);
+    if (name != NULL) {
+        printF(GREEN, "%d. %s\n", playlistIndex, name);
+
+        // Procesar las canciones.
+        char *song;
+        char songIndex = 'a';
+        while ((song = strtok_r(NULL, "&", &saveptr1)) != NULL) {
+            printF(GREEN, "\t%c. %s\n", songIndex, song);
+            songIndex++;
+        }
+    }
+}
+
+void print_playlists(char *to_print) {
+    char *saveptr2;
+
+    // Dividir las playlists usando el carácter '#'.
+    char *playlist = strtok_r(to_print, "#", &saveptr2);
+    int playlistIndex = 1;
+    while (playlist != NULL) {
+        printSongsInPlaylists(playlist, playlistIndex);
+        playlist = strtok_r(NULL, "#", &saveptr2);
+        playlistIndex++;
+    }
 }
 
 void *receive_frames(void *args) {
     thread_receive_frames trf = *(thread_receive_frames *)args;
-    Frame response_frame;
 
     while (!bowman_sigint_received) {
+        Frame response_frame;
         if (receive_frame(*trf.poole_socket, &response_frame) <= 0) {
             continue;   
         }
@@ -430,49 +579,77 @@ void *receive_frames(void *args) {
 }
 
 void handleListSongsSize(char* data) {
-    //printf("\nList Songs Size: %s\n", response_frame.header_plus_data + response_frame.header_length);
-    //printf("Size: %d\n", atoi(response_frame.header_plus_data + response_frame.header_length));
+    int data_length = strlen(data) + 1;
+    char* data_copy = malloc(data_length);
+    if (data_copy == NULL) {
+        printF(RED, "Malloc\n");
+        return; 
+    }
+    strcpy(data_copy, data);
+
     Message_buffer *msg = malloc(sizeof(Message_buffer));
     memset(msg, 0, sizeof(Message_buffer));
     msg->msg_type = 1;
-    strncpy(msg->msg_text, data, HEADER_MAX_SIZE);
-    msg->msg_text[HEADER_MAX_SIZE] = '\0';
-    printF(GREEN, "Message received 398: %s\n", msg->msg_text);
-    msg_queue_writer(msg_id, msg);    
+    strcpy(msg->msg_text, data_copy);
+    msg_queue_writer(msg_id, msg);  
+    free(data_copy);  
+    free(msg);
 }
 
 void handleSongsResponse(char *data) {
-    //printF(GREEN, "\nSongs Response: %s\n", response_frame.header_plus_data);
-    //printF(GREEN, "\nTamaño de la trama: %d\n", strlen(response_frame.header_plus_data));
+    int data_length = strlen(data) + 1;
+    char* data_copy = malloc(data_length);
+    if (data_copy == NULL) {
+        printF(RED, "Malloc\n");
+        return; 
+    }
+    strcpy(data_copy, data);
+
     Message_buffer *msg = malloc(sizeof(Message_buffer));
     memset(msg, 0, sizeof(Message_buffer));
     msg->msg_type = 1;
     memset(msg->msg_text, 0, sizeof(msg->msg_text));
-    strcpy(msg->msg_text, data);
+    strcpy(msg->msg_text, data_copy);
     msg_queue_writer(msg_id, msg);
+    free(data_copy);
+    free(msg);
 }
 
 void handleListPlaylistsSize(char *data) {
-    //printf("\nList Playlists Size: %s\n", response_frame.header_plus_data + response_frame.header_length);
-    //printf("Size: %d\n", atoi(response_frame.header_plus_data + response_frame.header_length));
+    int data_length = strlen(data) + 1;
+    char* data_copy = malloc(data_length);
+    if (data_copy == NULL) {
+        printF(RED, "Malloc\n");
+        return; 
+    }
+    strcpy(data_copy, data);
+
     Message_buffer *msg = malloc(sizeof(Message_buffer));
     memset(msg, 0, sizeof(Message_buffer));
-    msg->msg_type = 2;
-    strncpy(msg->msg_text, data, HEADER_MAX_SIZE);
-    msg->msg_text[HEADER_MAX_SIZE] = '\0';
-    printF(GREEN, "Message received 421: %s\n", msg->msg_text);
-    msg_queue_writer(msg_id, msg);
+    msg->msg_type = 1;
+    strcpy(msg->msg_text, data_copy);
+    msg_queue_writer(msg_id, msg); 
+    free(data_copy);
+    free(msg);
 }
 
 void handlePlaylistsResponse(char *data) {
-    //printF(GREEN, "\nPlaylists Response: %s\n", response_frame.header_plus_data);
-    //printF(GREEN, "\nTamaño de la trama: %d\n", strlen(response_frame.header_plus_data));
+    int data_length = strlen(data) + 1;
+    char* data_copy = malloc(data_length);
+    if (data_copy == NULL) {
+        printF(RED, "Malloc\n");
+        return; 
+    }
+    strcpy(data_copy, data);
+
     Message_buffer *msg = malloc(sizeof(Message_buffer));
     memset(msg, 0, sizeof(Message_buffer));
-    msg->msg_type = 2;
+    msg->msg_type = 1;
     memset(msg->msg_text, 0, sizeof(msg->msg_text));
-    strcpy(msg->msg_text, data);
+    strcpy(msg->msg_text, data_copy);
     msg_queue_writer(msg_id, msg);
+    free(data_copy);
+    free(msg);
 }
 
 void handleNewFile(char* data) {
@@ -490,6 +667,7 @@ void handleNewFile(char* data) {
         free(data_copy); 
         return; 
     }
+    free(data_copy);
     //pthread_detach(new_file); 
 }
 
@@ -674,4 +852,3 @@ void* startSongDownload(void* args) {
 
     return NULL;
 }
-

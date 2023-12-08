@@ -234,6 +234,7 @@ void* list_songs_handler(void* args) {
         data_segment[data_length] = '\0'; // Asegura que el segmento de datos esté correctamente terminado
 
         Frame response_frame = frame_creator(0x02, "SONGS_RESPONSE", data_segment);
+        printF(YELLOW, "Sending frame: %s\n", response_frame.header_plus_data);
         if (send_frame(t_args->client_socket, &response_frame) < 0) {
             printF(RED, "Error sending response frame to Bowman.\n");
             free(songs_list);
@@ -255,8 +256,8 @@ void append_playlist(char **playlists_list, char *playlist_name, char separator)
         return;
     }
     *playlists_list = temp;
-    strcat(*playlists_list, playlist_name);
     strncat(*playlists_list, &separator, 1);
+    strcat(*playlists_list, playlist_name);
 }
 
 void get_playlists_and_songs_files_recursive(char *directory, char **playlists_list) {
@@ -343,21 +344,20 @@ void* list_playlists_handler(void* args) {
     char data_segment[HEADER_MAX_SIZE]; // 253 bytes
 
     //MANDAR EL TAMAÑO DE LA LISTA DE CANCIONES AL CLIENTE
-    printF(YELLOW, "Playlist length: %d\n", list_length);
+    printF(YELLOW, "List length: %d\n", list_length);
 
-    char list_length_str[HEADER_MAX_SIZE - strlen("PLAYLISTS_SONGS_SIZE")];
-    memset(list_length_str, 0, HEADER_MAX_SIZE - strlen("PLAYLISTS_SONGS_SIZE"));
+    char list_length_str[HEADER_MAX_SIZE - strlen("LIST_PLAYLISTS_SIZE")];
+    memset(list_length_str, 0, HEADER_MAX_SIZE - strlen("LIST_PLAYLISTS_SIZE"));
     snprintf(list_length_str, sizeof(list_length_str), "%d", list_length);
 
-    Frame list_length_frame = frame_creator(0x02, "PLAYLISTS_SONGS_SIZE", list_length_str);
+    Frame list_length_frame = frame_creator(0x02, "LIST_PLAYLISTS_SIZE", list_length_str);
     if (send_frame(t_args->client_socket, &list_length_frame) < 0) {
         printF(RED, "Error sending list length frame to Bowman.\n");
         free(playlist_list);
         return NULL;
     }
 
-    usleep(100000); // 100ms
-
+    //Empezar a mandar la lista de canciones (HEADER = PLAYLISTS_RESPONSE)
     while (offset < list_length) {
         int data_length = (list_length - offset > HEADER_MAX_SIZE - 1) ? HEADER_MAX_SIZE - 1 : list_length - offset;
         memset(data_segment, 0, HEADER_MAX_SIZE);
@@ -365,6 +365,7 @@ void* list_playlists_handler(void* args) {
         data_segment[data_length] = '\0'; // Asegura que el segmento de datos esté correctamente terminado
 
         Frame response_frame = frame_creator(0x02, "PLAYLISTS_RESPONSE", data_segment);
+        printF(YELLOW, "Sending frame: %s\n", response_frame.header_plus_data);
         if (send_frame(t_args->client_socket, &response_frame) < 0) {
             printF(RED, "Error sending response frame to Bowman.\n");
             free(playlist_list);
@@ -467,7 +468,7 @@ off_t getFileSize(const char *filePath) {
         return fileStat.st_size;
     } else {
         // En cas d'error, retorna -1 (pots canviar a una altra gestió d'errors segons les teves necessitats)
-        perror("Error obtenint informació del fitxer");
+        printF(RED, "Error obtenint informació del fitxer\n");
         return -1;
     }
 }
@@ -516,7 +517,7 @@ void* send_song(void * args){
 void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
     char *id_char = intToStr(id);
     int id_length = strlen(id_char);
-    int max_buffer_size = 253 - 9 - 1 - id_length; 
+    //int max_buffer_size = 253 - 9 - 1 - id_length; 
 
     int fd = open(path, O_RDONLY);
     if (fd < 0) {
