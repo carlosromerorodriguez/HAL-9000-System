@@ -545,7 +545,7 @@ void download(char *name){
         Frame download_frame = frame_creator(0x03, "DOWNLOAD_LIST", name);
 
         if (send_frame(poole_socket, &download_frame) < 0) {
-        printF(RED, "Error sending DOWNLOAD_SONG frame to Poole server.\n");
+        printF(RED, "Error sending DOWNLOAD_LIST frame to Poole server.\n");
         return;
     }
     }else{
