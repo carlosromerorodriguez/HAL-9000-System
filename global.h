@@ -52,6 +52,7 @@
  * @brief Maximum size for frames protocol
 */
 #define FRAME_SIZE 256
+#define HEADER_SIZE 3
 #define HEADER_MAX_SIZE 253
 
 typedef struct {
@@ -112,6 +113,18 @@ void display_loading_spinner(int color, int duration);
  * @return Frame Frame creado
 */
 Frame frame_creator(char type, char* header, char* data);
+
+/**
+ * @brief Crea un frame con los datos especificados binarios y lo retorna
+ * 
+ * @param type Tipo de frame
+ * @param header Header del frame
+ * @param data Datos del frame
+ * @param data_size Tamaño de los datos
+ * 
+ * @return Frame Frame creado
+*/
+Frame binary_frame_creator(char type, char* header, char* data, int data_size);
 
 /**
  * @brief Sends a frame through a socket

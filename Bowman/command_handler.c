@@ -34,6 +34,7 @@ void printSongsInPlaylists(char *playlist, char playlistIndex);
 //Handle downloads
 void handleNewFile(char* data);
 void handleFileData(char* data);
+void parseSongInfo(const char *str, Song *song);
 
 /**
  * @brief Parse the command to remove the extra spaces
@@ -147,14 +148,7 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
             *connected = 1; 
 
             //Crear la cola de mensajes
-            key_t key = ftok("bowman.c", 12);
-            if (key == (key_t)-1) {
-                printF(RED, "Error creating key for message queue\n");
-                free(opcode);
-                return EXIT_FAILURE;
-            }
-
-            msg_id = msgget(key, 0600 | IPC_CREAT);
+            msg_id = msgget(IPC_PRIVATE, 0600 | IPC_CREAT);
             if (msg_id == -1) {
                 printF(RED, "Error creating message queue\n");
                 free(opcode);
@@ -177,7 +171,7 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
         } else if (strcasecmp(opcode, "LOGOUT") == 0) { //PREGUNTAR SI SE PUEDE SALIR SIN ESTAR CONECTADO
             printF(GREEN, "Thanks for using HAL 9000, see you soon, music lover!\n");
             free(opcode);
-            return EXIT_FAILURE;
+            return 1;
         } else {
             printF(RED, "Cannot execute command, you are not connected to HAL 9000\n");
         }
@@ -189,8 +183,9 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
             } else {
                 printF(GREEN, "\nThanks for using HAL 9000, see you soon, music lover!\n");
             }
+
             free(opcode);
-            return EXIT_FAILURE;
+            return 1;
         } else if (!strncasecmp(opcode, "DOWNLOAD", 8)) {
 
             download(command + strlen("DOWNLOAD "));
@@ -354,7 +349,7 @@ void list_songs() {
         return;
     }
     memset(msg, 0, sizeof(Message_buffer));
-    msg->msg_type = 1;
+    msg->msg_type = 1000;
     msg_queue_reader(msg_id, msg);
     int size_fichero = atoi(msg->msg_text);
     free(msg); 
@@ -377,7 +372,7 @@ void list_songs() {
             return;
         }
         memset(msg, 0, sizeof(Message_buffer));
-        msg->msg_type = 1;
+        msg->msg_type = 1000;
         msg_queue_reader(msg_id, msg);
 
         size_t old_size = strlen(to_print);
@@ -442,7 +437,7 @@ void list_playlists() {
         return;
     }
     memset(msg, 0, sizeof(Message_buffer));
-    msg->msg_type = 1;
+    msg->msg_type = 1001;
     msg_queue_reader(msg_id, msg);
     int size_fichero = atoi(msg->msg_text);
     free(msg); 
@@ -465,7 +460,7 @@ void list_playlists() {
             return;
         }
         memset(msg, 0, sizeof(Message_buffer));
-        msg->msg_type = 1;
+        msg->msg_type = 1001;
         msg_queue_reader(msg_id, msg);
 
         size_t old_size = strlen(to_print);
@@ -505,12 +500,10 @@ int countPlaylists(const char *str) {
 
 void printSongsInPlaylists(char *playlist, char playlistIndex) {
     char *saveptr1;
-    
-    // El primer token será el nombre de la playlist.
     char *name = strtok_r(playlist, "&", &saveptr1);
+    
     if (name != NULL) {
         printF(GREEN, "%d. %s\n", playlistIndex, name);
-
         // Procesar las canciones.
         char *song;
         char songIndex = 'a';
@@ -523,15 +516,24 @@ void printSongsInPlaylists(char *playlist, char playlistIndex) {
 
 void print_playlists(char *to_print) {
     char *saveptr2;
-
-    // Dividir las playlists usando el carácter '#'.
     char *playlist = strtok_r(to_print, "#", &saveptr2);
     int playlistIndex = 1;
+
     while (playlist != NULL) {
         printSongsInPlaylists(playlist, playlistIndex);
         playlist = strtok_r(NULL, "#", &saveptr2);
         playlistIndex++;
     }
+}
+
+//DOWNLOAD SONG FUNCTION 
+void download(char *name){
+    Frame download_frame = frame_creator(0x03, "DOWNLOAD_SONG", name);
+
+    if (send_frame(poole_socket, &download_frame) < 0) {
+        printF(RED, "Error sending DOWNLOAD_SONG frame to Poole server.\n");
+        return;
+    } 
 }
 
 void *receive_frames(void *args) {
@@ -559,6 +561,7 @@ void *receive_frames(void *args) {
             handleNewFile(response_frame.header_plus_data + response_frame.header_length);
         }
         else if (!strncasecmp(response_frame.header_plus_data, "FILE_DATA", response_frame.header_length)) {
+            printF(RED, "File data [BEFORE] -> %s\n", response_frame.header_plus_data);
             handleFileData(response_frame.header_plus_data + response_frame.header_length);
         }
         else if (!strncasecmp(response_frame.header_plus_data , "LOGOUT_OK", response_frame.header_length)) {
@@ -589,7 +592,7 @@ void handleListSongsSize(char* data) {
 
     Message_buffer *msg = malloc(sizeof(Message_buffer));
     memset(msg, 0, sizeof(Message_buffer));
-    msg->msg_type = 1;
+    msg->msg_type = 1000;
     strcpy(msg->msg_text, data_copy);
     msg_queue_writer(msg_id, msg);  
     free(data_copy);  
@@ -607,7 +610,7 @@ void handleSongsResponse(char *data) {
 
     Message_buffer *msg = malloc(sizeof(Message_buffer));
     memset(msg, 0, sizeof(Message_buffer));
-    msg->msg_type = 1;
+    msg->msg_type = 1000;
     memset(msg->msg_text, 0, sizeof(msg->msg_text));
     strcpy(msg->msg_text, data_copy);
     msg_queue_writer(msg_id, msg);
@@ -626,7 +629,7 @@ void handleListPlaylistsSize(char *data) {
 
     Message_buffer *msg = malloc(sizeof(Message_buffer));
     memset(msg, 0, sizeof(Message_buffer));
-    msg->msg_type = 1;
+    msg->msg_type = 1001;
     strcpy(msg->msg_text, data_copy);
     msg_queue_writer(msg_id, msg); 
     free(data_copy);
@@ -644,7 +647,7 @@ void handlePlaylistsResponse(char *data) {
 
     Message_buffer *msg = malloc(sizeof(Message_buffer));
     memset(msg, 0, sizeof(Message_buffer));
-    msg->msg_type = 1;
+    msg->msg_type = 1001;
     memset(msg->msg_text, 0, sizeof(msg->msg_text));
     strcpy(msg->msg_text, data_copy);
     msg_queue_writer(msg_id, msg);
@@ -661,42 +664,115 @@ void handleNewFile(char* data) {
     }
     strcpy(data_copy, data);
 
+    //printF(RED, "New file -> %s\n", data_copy);
+
     pthread_t new_file;
     if (pthread_create(&new_file, NULL, startSongDownload, data_copy) != 0) {
         printF(RED, "Pthread_create\n");
         free(data_copy); 
         return; 
+    } else {
+        if (pthread_detach(new_file) != 0) {
+            printF(RED, "Pthread_detach\n");
+            free(data_copy);
+        }
+        return;
     }
-    free(data_copy);
-    //pthread_detach(new_file); 
 }
 
 void handleFileData(char* data) {
-    int data_length = strlen(data) + 1;
-    char* data_copy = malloc(data_length);
-    if (data_copy == NULL) {
-        printF(RED, "Malloc\n");
-        return;
+    // ID (3 bytes [0-999]) + '&' + '\0'
+    char id_str[4];
+    memcpy(id_str, data, 3);
+    id_str[4] = '\0';
+
+    long id = strtol(id_str, NULL, 10);
+
+    Message_buffer msg;
+    memset(&msg, 0, sizeof(Message_buffer));
+    msg.msg_type = id;
+
+
+    size_t data_length = HEADER_MAX_SIZE - strlen("FILE_DATA") - 3 - 1; // 3 bytes para el ID + 1 byte para el '&'
+    size_t msg_text_length = (data_length < sizeof(msg.msg_text)) ? data_length : sizeof(msg.msg_text);
+    memcpy(msg.msg_text, data + 4, msg_text_length);
+
+    printF(RED, "File data [AFTER] -> %s\n", msg.msg_text);
+    msg_queue_writer(msg_id, &msg);
+}
+
+void* startSongDownload(void* args) {
+    char* str = (char*)args; 
+
+    Song newSong;
+    parseSongInfo(str, &newSong); 
+
+    int fd = open(newSong.fileName, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (fd < 0) {
+        printF(RED, "Error opening file\n");
+        pthread_exit(NULL);
     }
-    strcpy(data_copy, data);           
-    char* datos = strdup(data_copy);
-    if (datos != NULL) {
-        Message_buffer msg;
-        long id;
-        char* ampersand = strchr(datos, '&');
-        ampersand = ampersand + 1;
-        if (ampersand != NULL) {
-            strcpy(msg.msg_text, ampersand); 
+
+    Message_buffer *msg = malloc(sizeof(Message_buffer));
+
+    msg->msg_type = (long)newSong.id;
+    long total_bytes_written = 0;
+    ssize_t max_write_size = HEADER_MAX_SIZE - strlen("FILE_DATA") - 3 - 1; // 3 bytes para el ID + 1 byte para el '&'
+    
+    while (total_bytes_written < newSong.fileSize) {
+        msg_queue_reader(msg_id, msg);
+
+        // Calcular cuántos bytes se deben escribir en esta iteración
+        size_t bytes_to_write = (total_bytes_written + max_write_size < newSong.fileSize) ? max_write_size : (newSong.fileSize - total_bytes_written);
+        //size_t bytes_to_write = sizeof(msg->msg_text);
+
+        int written = write(fd, msg->msg_text, bytes_to_write);
+        if (written < 0) {
+            printF(RED, "Error writing to file\n");
+            break;
         }
-        id = atoi(datos);
-        msg.msg_type = id;
 
-        msg_queue_writer(msg_id, &msg);
-
-        free(datos);
+        total_bytes_written += written;
     }
-            
-    free(data_copy);    
+
+    printF(GREEN, "\nDescarga completada\n");
+    close(fd);
+    free(msg);
+    free(str);
+
+    pthread_exit(NULL);
+}
+
+void parseSongInfo(const char *str, Song *song) {
+    char *token;
+    char *tempStr;
+    size_t length;
+
+    // Copiar la cadena original para no modificarla durante el uso de strtok
+    tempStr = strdup(str);
+
+    // Extraer el nombre del archivo
+    token = strtok(tempStr, "&");
+    length = strlen(token) + 1;
+    song->fileName = malloc(length);
+    strncpy(song->fileName, token, length);
+
+    // Extraer el tamaño del archivo
+    token = strtok(NULL, "&");
+    song->fileSize = strtol(token, NULL, 10);
+
+    // Extraer el MD5SUM
+    token = strtok(NULL, "&");
+    length = strlen(token) + 1;
+    song->md5sum = malloc(length);
+    strncpy(song->md5sum, token, length);
+
+    // Extraer el ID
+    token = strtok(NULL, "&");
+    song->id = atoi(token);
+
+    // Liberar la memoria temporal
+    free(tempStr);
 }
 
 //LOGOUT FUNCTIONS
@@ -767,88 +843,4 @@ int disconnect_notification_to_discovery(char *username, char *discovery_ip, int
 
     close(sock);
     return EXIT_SUCCESS;
-}
-
-void download(char *name){
-
-    Frame download_frame = frame_creator(0x03, "DOWNLOAD_SONG", name);
-
-    if (send_frame(poole_socket, &download_frame) < 0) {
-        printF(RED, "Error sending DOWNLOAD_SONG frame to Poole server.\n");
-        return ;
-    } 
-
-}
-
-void parseSongInfo(const char *str, Song *song) {
-    char *token;
-    char *tempStr;
-    size_t length;
-
-    // Copiar la cadena original para no modificarla durante el uso de strtok
-    tempStr = strdup(str);
-
-    // Extraer el nombre del archivo
-    token = strtok(tempStr, "&");
-    length = strlen(token) + 1;
-    song->fileName = malloc(length);
-    strncpy(song->fileName, token, length);
-
-    // Extraer el tamaño del archivo
-    token = strtok(NULL, "&");
-    song->fileSize = strtol(token, NULL, 10);
-
-    // Extraer el MD5SUM
-    token = strtok(NULL, "&");
-    length = strlen(token) + 1;
-    song->md5sum = malloc(length);
-    strncpy(song->md5sum, token, length);
-
-    // Extraer el ID
-    token = strtok(NULL, "&");
-    song->id = atoi(token);
-
-    // Liberar la memoria temporal
-    free(tempStr);
-}
-
-void* startSongDownload(void* args) {
-    char* str = (char*)args; 
-
-    Song newSong;
-    parseSongInfo(str, &newSong); 
-
-    long fileSize = newSong.fileSize;
-
-    int fd = open(newSong.fileName, O_WRONLY | O_CREAT | O_TRUNC, 0666);
-    if (fd < 0) {
-        perror("Error opening file");
-        return NULL;
-    }
-
-    Message_buffer *msg = malloc(sizeof(Message_buffer));
-    msg->msg_type = 2;
-
-    long total_bytes_written = 0;
-    
-    while (total_bytes_written < fileSize) {
-
-        msg_queue_reader(msg_id, msg);
-
-        printF(RED, "Escribimos -> %s\n", msg->msg_text);
-
-        int written = write(fd, msg->msg_text, sizeof(msg->msg_text));
-        if (written < 0) {
-            perror("Error writing to file");
-            break;
-        }
-        total_bytes_written += written;
-        //printF(RED ,"%ld / %ld", total_bytes_written , fileSize);
-    }
-
-    printF(GREEN, "\nDescarrega completada\n");
-    close(fd);
-    free(msg);
-
-    return NULL;
 }

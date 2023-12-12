@@ -18,7 +18,7 @@ void* list_playlists_handler(void* args);
 char* searchSong(const char *basePath, const char *songName);   
 long getFileSize(const char *filePath);
 void* send_song(void * args);
-void empezar_envio(thread_args t_args,int id, char* path, long file_size);
+void empezar_envio(thread_args t_args, int id, char* path, long file_size);
 
 /**
  * @brief Maneja la conexion con Bowman y el envio de comandos
@@ -69,8 +69,6 @@ void *client_handler(void* args) {
             if (pthread_create(&t_args->list_songs_thread, NULL, list_songs_handler, (void *)t_args) != 0) {
                 printF(RED, "Error creating thread to list songs.\n");
                 return NULL;
-            } else {
-                pthread_join(t_args->list_songs_thread, NULL);
             }
         }
         // LIST PLAYLISTS
@@ -82,8 +80,6 @@ void *client_handler(void* args) {
             if (pthread_create(&t_args->list_playlists_thread, NULL, list_playlists_handler, (void *)t_args) != 0) {
                 printF(RED, "Error creating thread to list playlists.\n");
                 return NULL;
-            } else {
-                pthread_join(t_args->list_songs_thread, NULL);
             }
         }
         //DOWNLOAD SONG
@@ -93,6 +89,7 @@ void *client_handler(void* args) {
 
             //Lanzar thread que gestione la descarga
             t_args->song_name = request_frame.header_plus_data + request_frame.header_length;
+            //Crear thread 
             if (pthread_create(&t_args->download_song_thread, NULL, send_song, (void *)t_args) != 0) {
                 printF(RED, "Error creating thread to list playlists.\n");
                 return NULL;
@@ -198,15 +195,6 @@ void* list_songs_handler(void* args) {
         printF(RED, "Error getting songs list.\n");
         return NULL;
     }
-
-    // Asegurar suficiente espacio para la concatenación
-    int extra_data_length = strlen("HSGSAGSAHSAGSAGSASAHASGHSAGHSAGHSAHGASHGHASGASGHJASGHJASGHAGHAGHSGHASGHASASGHAGHSAHSGASHAHSGASGHASHGASGHSAGHSAGHAHSGSHAGDHGHAGHGDHGASASHGASHJGSAHJAGSHJSAGJASGHSAGASGASGSAHSGAGSASAGHSAGSAGHSAHSGAS") + 1;
-    songs_list = realloc(songs_list, strlen(songs_list) + extra_data_length);
-    if (songs_list == NULL) {
-        printF(RED, "Error reallocating memory for songs list.\n");
-        return NULL;
-    }
-    strcat(songs_list, "HSGSAGSAHSAGSAGSASAHASGHSAGHSAGHSAHGASHGHASGASGHJASGHJASGHAGHAGHSGHASGHASASGHAGHSAHSGASHAHSGASGHASHGASGHSAGHSAGHAHSGSHAGDHGHAGHGDHGASASHGASHJGSAHJAGSHJSAGJASGHSAGASGASGSAHSGAGSASAGHSAGSAGHSAHSGAS");
 
     int list_length = strlen(songs_list);
     int offset = 0;
@@ -324,22 +312,15 @@ void* list_playlists_handler(void* args) {
         return NULL;
     }
 
-    char *playlist_list = get_playlists_list(t_args);
-    if (playlist_list == NULL) {
+    char *playlists_list = get_playlists_list(t_args);
+    if (playlists_list == NULL) {
         printF(RED, "Error getting songs list.\n");
         return NULL;
     }
 
-    // Asegurar suficiente espacio para la concatenación
-    int extra_data_length = strlen("HSGSAGSAHSAGSAGSASAHASGHSAGHSAGHSAHGASHGHASGASGHJASGHJASGHAGHAGHSGHASGHASASGHAGHSAHSGASHAHSGASGHASHGASGHSAGHSAGHAHSGSHAGDHGHAGHGDHGASASHGASHJGSAHJAGSHJSAGJASGHSAGASGASGSAHSGAGSASAGHSAGSAGHSAHSGAS") + 1;
-    playlist_list = realloc(playlist_list, strlen(playlist_list) + extra_data_length);
-    if (playlist_list == NULL) {
-        printF(RED, "Error reallocating memory for songs list.\n");
-        return NULL;
-    }
-    strcat(playlist_list, "HSGSAGSAHSAGSAGSASAHASGHSAGHSAGHSAHGASHGHASGASGHJASGHJASGHAGHAGHSGHASGHASASGHAGHSAHSGASHAHSGASGHASHGASGHSAGHSAGHAHSGSHAGDHGHAGHGDHGASASHGASHJGSAHJAGSHJSAGJASGHSAGASGASGSAHSGAGSASAGHSAGSAGHSAHSGAS");
+    printF(YELLOW, "Songs list: %s\n", playlists_list);
 
-    int list_length = strlen(playlist_list);
+    int list_length = strlen(playlists_list);
     int offset = 0;
     char data_segment[HEADER_MAX_SIZE]; // 253 bytes
 
@@ -353,7 +334,7 @@ void* list_playlists_handler(void* args) {
     Frame list_length_frame = frame_creator(0x02, "LIST_PLAYLISTS_SIZE", list_length_str);
     if (send_frame(t_args->client_socket, &list_length_frame) < 0) {
         printF(RED, "Error sending list length frame to Bowman.\n");
-        free(playlist_list);
+        free(playlists_list);
         return NULL;
     }
 
@@ -361,20 +342,20 @@ void* list_playlists_handler(void* args) {
     while (offset < list_length) {
         int data_length = (list_length - offset > HEADER_MAX_SIZE - 1) ? HEADER_MAX_SIZE - 1 : list_length - offset;
         memset(data_segment, 0, HEADER_MAX_SIZE);
-        strncpy(data_segment, playlist_list + offset, data_length);
+        strncpy(data_segment, playlists_list + offset, data_length);
         data_segment[data_length] = '\0'; // Asegura que el segmento de datos esté correctamente terminado
 
         Frame response_frame = frame_creator(0x02, "PLAYLISTS_RESPONSE", data_segment);
         printF(YELLOW, "Sending frame: %s\n", response_frame.header_plus_data);
         if (send_frame(t_args->client_socket, &response_frame) < 0) {
             printF(RED, "Error sending response frame to Bowman.\n");
-            free(playlist_list);
+            free(playlists_list);
             return NULL;
         }
         offset += data_length;
     }
 
-    free(playlist_list);
+    free(playlists_list);
     pthread_exit(NULL);
 }
 
@@ -462,19 +443,15 @@ char* getFileMD5(char *filePath) {
 off_t getFileSize(const char *filePath) {
     struct stat fileStat;
 
-    // Intenta obtenir informació sobre el fitxer
     if (stat(filePath, &fileStat) == 0) {
-        // Retorna la mida del fitxer
         return fileStat.st_size;
     } else {
-        // En cas d'error, retorna -1 (pots canviar a una altra gestió d'errors segons les teves necessitats)
         printF(RED, "Error obtenint informació del fitxer\n");
         return -1;
     }
 }
 
 void* send_song(void * args){
-
     thread_args *t_args = (thread_args *)args;
 
     printF(GREEN, "Thread created -> sending %s\n", t_args->song_name);
@@ -495,8 +472,12 @@ void* send_song(void * args){
 
     char *md5sum = getFileMD5(path);
     off_t file_size = getFileSize(path);
+    if (file_size < 0) {
+        printF(RED, "Error getting file size.\n");
+        pthread_exit(NULL);
+    }
     char *file_name = t_args->song_name;
-    int id = ftok(path, 1);
+    int id = rand() % 900 + 100; // Genera un número aleatorio entre 100 y 999
 
     int length = snprintf(NULL, 0, "%s&%lu&%s&%d", file_name, file_size, md5sum, id);
     char *data = malloc(length + 1);
@@ -509,63 +490,90 @@ void* send_song(void * args){
         pthread_exit(NULL);
     } 
 
-    empezar_envio(*t_args, id, path, file_size);    
+    empezar_envio(*t_args, id, path, file_size);   
+
+    free(path);
+    free(md5sum);
+    free(newPath); 
+    free(data);
+
+    printF(GREEN, "Thread finished\n");
 
     pthread_exit(NULL);
 }
 
 void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
     char *id_char = intToStr(id);
-    int id_length = strlen(id_char);
-    //int max_buffer_size = 253 - 9 - 1 - id_length; 
+    int id_length = 3;
 
     int fd = open(path, O_RDONLY);
     if (fd < 0) {
         printF(RED, "Error opening file\n");
+        free(id_char);
         return;
     }
 
     long total_bytes_sent = 0;
-
+    ssize_t max_bytes_to_send = HEADER_MAX_SIZE - strlen("FILE_DATA") - id_length - 1;
+    
     while (total_bytes_sent < file_size) {
-        long current_buffer_size = (file_size - total_bytes_sent > HEADER_MAX_SIZE) ? HEADER_MAX_SIZE : (file_size - total_bytes_sent);
-        char *buffer = malloc(sizeof(char) * current_buffer_size);
-        if (!buffer) {
+        // Calcula el tamaño del buffer para esta iteración
+        size_t buffer_size = ((total_bytes_sent + max_bytes_to_send) <= file_size) ? max_bytes_to_send : (file_size - total_bytes_sent);
+
+        char *buffer = malloc(buffer_size);
+        if (buffer == NULL) {
             printF(RED, "Error allocating memory for buffer\n");
             close(fd);
+            free(id_char);
             return;
         }
+        memset(buffer, 0, buffer_size);
 
-
-        int bytes_read = read(fd, buffer, current_buffer_size);
+        int bytes_read = read(fd, buffer, buffer_size);
         if (bytes_read < 0) {
             printF(RED, "Error reading file\n");
             free(buffer);
             close(fd);
+            free(id_char);
             return;
         }
 
-        char *data = malloc(sizeof(char) * (id_length + sizeof(char) + bytes_read));
+        char *data = malloc(id_length + 1 + bytes_read);
+        if (data == NULL) {
+            printF(RED, "Error allocating memory for data\n");
+            free(buffer);
+            close(fd);
+            free(id_char);
+            return;
+        }
+        memset(data, 0, id_length + 1 + bytes_read);
+
         memcpy(data, id_char, id_length);
         data[id_length] = '&';
         memcpy(data + id_length + 1, buffer, bytes_read);
 
-        Frame file_data = frame_creator(0x04, "FILE_DATA", data); 
+        printF(YELLOW, "Sending frame: %s\n", data);
+
+        Frame file_data = frame_creator(0x04, "FILE_DATA", data);
         if (send_frame(t_args.client_socket, &file_data) < 0) {
             printF(RED, "Error sending FILE_DATA frame to %s.\n", t_args.username);
             free(data);
             free(buffer);
             close(fd);
+            free(id_char);
             return;
         }
 
         total_bytes_sent += bytes_read;
         printF(RED, "%ld / %ld\n", total_bytes_sent, file_size);
+
         free(data);
         free(buffer);
+
+        sleep(0.05);
     }
 
     printF(GREEN, "File completed!\n");
     close(fd);
+    free(id_char);
 }
-

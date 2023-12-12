@@ -148,8 +148,8 @@ void free_all_dynamic_memory(void) {
         thread_ids = NULL;
     }
 
-    pthread_join(args->list_songs_thread, NULL);
-    pthread_join(args->list_playlists_thread, NULL);
+    //pthread_join(args->list_songs_thread, NULL);
+    //pthread_join(args->list_playlists_thread, NULL);
 
     if (poole_config != NULL) {
         free(poole_config->username);

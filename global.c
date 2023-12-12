@@ -129,13 +129,17 @@ void display_loading_spinner(int color, int duration) {
 Frame frame_creator(char type, char* header, char* data) {
     Frame frame;
     memset(&frame, 0, sizeof(frame));  
-    
+
     frame.type = type;
     frame.header_length = strlen(header);
-
+    
     if (strcmp(header, "FILE_DATA") == 0) {
         memcpy(frame.header_plus_data, header, frame.header_length);
-        memcpy(frame.header_plus_data + frame.header_length, data, HEADER_MAX_SIZE - frame.header_length);
+
+        int data_length = HEADER_MAX_SIZE - strlen("FILE_DATA"); // (0-999)
+        // Copiar los datos binarios directamente.
+        memcpy(frame.header_plus_data + frame.header_length, data, data_length);
+        printF(GREEN, "Data Frame Creator: %s\n", frame.header_plus_data);
     } else {
         snprintf(frame.header_plus_data, frame.header_length + 1, "%s", header);
         snprintf(frame.header_plus_data + frame.header_length, HEADER_MAX_SIZE - frame.header_length, "%s", data);
@@ -143,7 +147,6 @@ Frame frame_creator(char type, char* header, char* data) {
 
     return frame;
 }
-
 
 /**
  * @brief Sends a frame through a socket
@@ -212,7 +215,7 @@ void msg_queue_reader(int msg_id, Message_buffer *message) {
         return;
     }
 
-    if (msgrcv(msg_id, message, sizeof(Message_buffer) - sizeof(long), 0, 0) == -1) {
+    if (msgrcv(msg_id, message, sizeof(Message_buffer) - sizeof(long), message->msg_type, 0) == -1) {
         printF(RED, "msgrcv error: %s\n", strerror(errno));
     }
 }
@@ -227,16 +230,30 @@ void msg_queue_delete(int msg_id) {
 }
 
 char* intToStr(int num) {
+    // Estimar el tamaño máximo de la representación del número.
+    int length = 0;
+    int temp = num;
+    if (num == 0) {
+        length = 1;
+    } else {
+        while (temp != 0) {
+            length++;
+            temp /= 10;
+        }
+    }
 
-    int length = snprintf(NULL, 0, "%d", num) + 1;
-
+    // Reservar memoria para la cadena sin contar el '\0'.
     char *str = (char *)malloc(length * sizeof(char));
     if (str == NULL) {
         perror("Error al asignar memoria");
         return NULL; 
     }
 
-    snprintf(str, length, "%d", num);
+    // Convertir cada dígito a char y almacenar en la cadena.
+    for (int i = length - 1; i >= 0; i--) {
+        str[i] = (num % 10) + '0';
+        num /= 10;
+    }
 
     return str;
 }
