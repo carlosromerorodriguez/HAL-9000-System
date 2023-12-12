@@ -9,9 +9,11 @@ typedef struct {
     char* username;
     char* server_directory;
     char* song_name;
+    char* list_name;
     pthread_t list_songs_thread;
     pthread_t list_playlists_thread;
     pthread_t download_song_thread;
+    pthread_t download_playlist_thread;
 } thread_args;
 
 /**

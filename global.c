@@ -139,7 +139,7 @@ Frame frame_creator(char type, char* header, char* data) {
         int data_length = HEADER_MAX_SIZE - strlen("FILE_DATA"); // (0-999)
         // Copiar los datos binarios directamente.
         memcpy(frame.header_plus_data + frame.header_length, data, data_length);
-        printF(GREEN, "Data Frame Creator: %s\n", frame.header_plus_data);
+        //printF(GREEN, "Data Frame Creator: %s\n", frame.header_plus_data);
     } else {
         snprintf(frame.header_plus_data, frame.header_length + 1, "%s", header);
         snprintf(frame.header_plus_data + frame.header_length, HEADER_MAX_SIZE - frame.header_length, "%s", data);

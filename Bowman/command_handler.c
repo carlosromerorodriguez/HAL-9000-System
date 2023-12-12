@@ -526,14 +526,39 @@ void print_playlists(char *to_print) {
     }
 }
 
+int check_if_playlist(char *name){
+
+    int name_length = strlen(name);
+    
+    if (name_length >= 4 && strcmp(name + name_length - 4, ".mp3") == 0) {
+        return 0;
+    } else {
+        return 1; 
+    }
+
+}
+
 //DOWNLOAD SONG FUNCTION 
 void download(char *name){
-    Frame download_frame = frame_creator(0x03, "DOWNLOAD_SONG", name);
 
-    if (send_frame(poole_socket, &download_frame) < 0) {
+    if(check_if_playlist(name)){
+        Frame download_frame = frame_creator(0x03, "DOWNLOAD_LIST", name);
+
+        if (send_frame(poole_socket, &download_frame) < 0) {
         printF(RED, "Error sending DOWNLOAD_SONG frame to Poole server.\n");
         return;
-    } 
+    }
+    }else{
+
+        Frame download_frame = frame_creator(0x03, "DOWNLOAD_SONG", name);
+
+        if (send_frame(poole_socket, &download_frame) < 0) {
+            printF(RED, "Error sending DOWNLOAD_SONG frame to Poole server.\n");
+            return;
+        } 
+    }
+
+    
 }
 
 void *receive_frames(void *args) {
@@ -561,7 +586,6 @@ void *receive_frames(void *args) {
             handleNewFile(response_frame.header_plus_data + response_frame.header_length);
         }
         else if (!strncasecmp(response_frame.header_plus_data, "FILE_DATA", response_frame.header_length)) {
-            printF(RED, "File data [BEFORE] -> %s\n", response_frame.header_plus_data);
             handleFileData(response_frame.header_plus_data + response_frame.header_length);
         }
         else if (!strncasecmp(response_frame.header_plus_data , "LOGOUT_OK", response_frame.header_length)) {
@@ -697,7 +721,7 @@ void handleFileData(char* data) {
     size_t msg_text_length = (data_length < sizeof(msg.msg_text)) ? data_length : sizeof(msg.msg_text);
     memcpy(msg.msg_text, data + 4, msg_text_length);
 
-    printF(RED, "File data [AFTER] -> %s\n", msg.msg_text);
+    //printF(RED, "File data [AFTER] -> %s\n", msg.msg_text);
     msg_queue_writer(msg_id, &msg);
 }
 

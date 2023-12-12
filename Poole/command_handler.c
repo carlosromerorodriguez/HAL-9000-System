@@ -16,8 +16,10 @@ char* get_playlists_and_songs(char *directory);
 char *get_playlists_list(thread_args *t_args);
 void* list_playlists_handler(void* args);
 char* searchSong(const char *basePath, const char *songName);   
+char* searchFolder(const char *basePath, const char *folderName); 
 long getFileSize(const char *filePath);
 void* send_song(void * args);
+void* send_list(void * args);
 void empezar_envio(thread_args t_args, int id, char* path, long file_size);
 
 /**
@@ -91,10 +93,24 @@ void *client_handler(void* args) {
             t_args->song_name = request_frame.header_plus_data + request_frame.header_length;
             //Crear thread 
             if (pthread_create(&t_args->download_song_thread, NULL, send_song, (void *)t_args) != 0) {
-                printF(RED, "Error creating thread to list playlists.\n");
+                printF(RED, "Error creating thread to download song\n");
                 return NULL;
             } else {
                 pthread_join(t_args->download_song_thread, NULL);
+            }
+        }
+        else if(strncmp(request_frame.header_plus_data, "DOWNLOAD_LIST", request_frame.header_length) == 0) {
+            printF(YELLOW,"\nNew request - %s wants to download the playlist %s\n", t_args->username, request_frame.header_plus_data + request_frame.header_length);
+            printF(YELLOW,"Sending %s to %s\n", t_args->username, request_frame.header_plus_data + request_frame.header_length);
+
+            //Lanzar thread que gestione la descarga
+            t_args->list_name = request_frame.header_plus_data + request_frame.header_length;
+            //Crear thread 
+            if (pthread_create(&t_args->download_playlist_thread, NULL, send_list, (void *)t_args) != 0) {
+                printF(RED, "Error creating thread to download playlist.\n");
+                return NULL;
+            } else {
+                pthread_join(t_args->download_playlist_thread, NULL);
             }
         }
         //USER LOGOUT
@@ -222,7 +238,7 @@ void* list_songs_handler(void* args) {
         data_segment[data_length] = '\0'; // Asegura que el segmento de datos esté correctamente terminado
 
         Frame response_frame = frame_creator(0x02, "SONGS_RESPONSE", data_segment);
-        printF(YELLOW, "Sending frame: %s\n", response_frame.header_plus_data);
+        //printF(YELLOW, "Sending frame: %s\n", response_frame.header_plus_data);
         if (send_frame(t_args->client_socket, &response_frame) < 0) {
             printF(RED, "Error sending response frame to Bowman.\n");
             free(songs_list);
@@ -397,6 +413,53 @@ char* searchSong(const char *basePath, const char *songName) {
     return path;
 }
 
+char* searchFolder(const char *basePath, const char *folderName) {
+    struct dirent *dp;
+    DIR *dir = opendir(basePath);
+    char *path = NULL;
+
+    // Verificar si se pudo abrir el directorio
+    if (!dir) {
+        return NULL;
+    }
+
+    while ((dp = readdir(dir)) != NULL) {
+        if (strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0) {
+            char newPath[PATH_MAX]; // Usar PATH_MAX para rutas
+            struct stat statbuf;
+
+            snprintf(newPath, sizeof(newPath), "%s/%s", basePath, dp->d_name);
+
+            // Verificar si stat tiene éxito
+            if (stat(newPath, &statbuf) == -1) {
+                perror("stat");
+                continue;
+            }
+
+            if (S_ISDIR(statbuf.st_mode)) {
+                if (strcmp(dp->d_name, folderName) == 0) {
+                    path = strdup(newPath);
+                    break;
+                } else {
+                    char *subPath = searchFolder(newPath, folderName);
+                    if (subPath) {
+                        path = subPath;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (path) {
+            break;
+        }
+    }
+
+    closedir(dir);
+    return path;
+}
+
+
 char* getFileMD5(char *filePath) {
     int pipefd[2];
     pid_t pid;
@@ -502,6 +565,58 @@ void* send_song(void * args){
     pthread_exit(NULL);
 }
 
+void* send_list(void * args){
+
+    thread_args *t_args = (thread_args *)args;
+
+    printF(GREEN, "Thread created -> sending %s\n", t_args->list_name);
+
+    int newPathLength = strlen("..") + strlen(t_args->server_directory) + 1;
+    char *newPath = malloc(newPathLength);
+
+    strcpy(newPath, "..");
+    strcat(newPath, t_args->server_directory);
+
+    char *path = searchFolder(newPath, t_args->list_name);
+    if (path) {
+        printF(GREEN,"Found: %s\n", path);
+    } else {
+        printF(RED,"Playlist not found.\n");
+        pthread_exit(NULL);
+    }
+
+
+    DIR *dir = opendir(path);
+    if (dir) {
+        struct dirent *dp;
+        while ((dp = readdir(dir)) != NULL) {
+
+            if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0) {
+                continue;
+            }
+
+            t_args->song_name = dp->d_name;
+
+            if (pthread_create(&t_args->download_song_thread, NULL, send_song, (void *)t_args) != 0) {
+                printF(RED, "Error creating thread to download song\n");
+                return NULL;
+            } else {
+                pthread_join(t_args->download_song_thread, NULL);
+            }
+                
+            printF(YELLOW, "Processing file: %s\n", dp->d_name);
+        }
+        closedir(dir);
+    } else {
+        printF(RED, "Failed to open directory: %s\n", path);
+    }
+
+    printF(GREEN, "Playlist descargada!\n");
+
+    pthread_exit(NULL);
+
+}
+
 void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
     char *id_char = intToStr(id);
     int id_length = 3;
@@ -552,7 +667,7 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
         data[id_length] = '&';
         memcpy(data + id_length + 1, buffer, bytes_read);
 
-        printF(YELLOW, "Sending frame: %s\n", data);
+        //printF(YELLOW, "Sending frame: %s\n", data);
 
         Frame file_data = frame_creator(0x04, "FILE_DATA", data);
         if (send_frame(t_args.client_socket, &file_data) < 0) {
