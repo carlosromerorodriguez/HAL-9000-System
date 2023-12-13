@@ -91,6 +91,7 @@ void *client_handler(void* args) {
 
             //Lanzar thread que gestione la descarga
             t_args->song_name = request_frame.header_plus_data + request_frame.header_length;
+            t_args->is_song = 1;
             //Crear thread 
             if (pthread_create(&t_args->download_song_thread, NULL, send_song, (void *)t_args) != 0) {
                 printF(RED, "Error creating thread to download song\n");
@@ -539,7 +540,14 @@ void* send_song(void * args){
         printF(RED, "Error getting file size.\n");
         pthread_exit(NULL);
     }
-    char *file_name = t_args->song_name;
+    char *file_name;
+
+    if (t_args->is_song) {
+        file_name = t_args->song_name;
+    } else {
+        file_name = t_args->playlist_name;
+    }
+
     int id = rand() % 900 + 100; // Genera un número aleatorio entre 100 y 999
 
     int length = snprintf(NULL, 0, "%s&%lu&%s&%d", file_name, file_size, md5sum, id);
@@ -585,7 +593,6 @@ void* send_list(void * args){
         pthread_exit(NULL);
     }
 
-
     DIR *dir = opendir(path);
     if (dir) {
         struct dirent *dp;
@@ -596,6 +603,14 @@ void* send_list(void * args){
             }
 
             t_args->song_name = dp->d_name;
+            t_args->is_song = 0;
+
+            //Playlist - Song Name
+            int size = strlen(t_args->list_name) + strlen(t_args->song_name) + strlen(" - ") + 1;
+            t_args->playlist_name = malloc(size);
+
+            // Formateando el string con el nuevo formato
+            snprintf(t_args->playlist_name, size, "%s - %s", t_args->list_name, t_args->song_name);
 
             if (pthread_create(&t_args->download_song_thread, NULL, send_song, (void *)t_args) != 0) {
                 printF(RED, "Error creating thread to download song\n");
@@ -670,6 +685,7 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
         //printF(YELLOW, "Sending frame: %s\n", data);
 
         Frame file_data = frame_creator(0x04, "FILE_DATA", data);
+
         if (send_frame(t_args.client_socket, &file_data) < 0) {
             printF(RED, "Error sending FILE_DATA frame to %s.\n", t_args.username);
             free(data);

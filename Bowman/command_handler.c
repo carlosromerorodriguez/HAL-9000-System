@@ -549,7 +549,6 @@ void download(char *name){
         return;
     }
     }else{
-
         Frame download_frame = frame_creator(0x03, "DOWNLOAD_SONG", name);
 
         if (send_frame(poole_socket, &download_frame) < 0) {

@@ -6,6 +6,8 @@
 // Estructura para pasar los argumentos al thread
 typedef struct {
     int client_socket;
+    int is_song;
+    char *playlist_name;
     char* username;
     char* server_directory;
     char* song_name;
