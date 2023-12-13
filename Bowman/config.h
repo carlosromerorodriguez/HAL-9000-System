@@ -18,6 +18,12 @@ typedef struct {
     int id;
 } Song;
 
+typedef struct {
+    Song song;
+    long downloaded_bytes;
+    long song_size;
+} Song_Downloading;
+
 /**
  * @brief Fill the Bowman configuration with the data from the file
  * 

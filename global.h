@@ -66,6 +66,8 @@ typedef struct {
     char msg_text[HEADER_MAX_SIZE];
 } Message_buffer;
 
+
+
 /**
  * @brief Print a message with the color specified
  * 

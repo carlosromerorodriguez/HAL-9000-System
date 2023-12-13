@@ -87,7 +87,7 @@ void *client_handler(void* args) {
         //DOWNLOAD SONG
         else if(strncmp(request_frame.header_plus_data, "DOWNLOAD_SONG", request_frame.header_length) == 0) {
             printF(YELLOW,"\nNew request - %s wants to download %s\n", t_args->username, request_frame.header_plus_data + request_frame.header_length);
-            printF(YELLOW,"Sending %s to %s\n", t_args->username, request_frame.header_plus_data + request_frame.header_length);
+            printF(YELLOW,"Sending %s to %s\n",  request_frame.header_plus_data + request_frame.header_length, t_args->username);
 
             //Lanzar thread que gestione la descarga
             t_args->song_name = request_frame.header_plus_data + request_frame.header_length;
@@ -102,7 +102,7 @@ void *client_handler(void* args) {
         }
         else if(strncmp(request_frame.header_plus_data, "DOWNLOAD_LIST", request_frame.header_length) == 0) {
             printF(YELLOW,"\nNew request - %s wants to download the playlist %s\n", t_args->username, request_frame.header_plus_data + request_frame.header_length);
-            printF(YELLOW,"Sending %s to %s\n", t_args->username, request_frame.header_plus_data + request_frame.header_length);
+            printF(YELLOW,"Sending %s to %s\n", request_frame.header_plus_data + request_frame.header_length,  t_args->username);
 
             //Lanzar thread que gestione la descarga
             t_args->list_name = request_frame.header_plus_data + request_frame.header_length;
@@ -518,7 +518,7 @@ off_t getFileSize(const char *filePath) {
 void* send_song(void * args){
     thread_args *t_args = (thread_args *)args;
 
-    printF(GREEN, "Thread created -> sending %s\n", t_args->song_name);
+    //printF(GREEN, "Thread created -> sending %s\n", t_args->song_name);
 
     int newPathLength = strlen("..") + strlen(t_args->server_directory) + 1;
     char *newPath = malloc(newPathLength);
@@ -528,7 +528,7 @@ void* send_song(void * args){
 
     char *path = searchSong(newPath, t_args->song_name);
     if (path) {
-        printF(GREEN,"Found: %s\n", path);
+        //printF(GREEN,"Found: %s\n", path);
     } else {
         printF(RED,"Song not found.\n");
         pthread_exit(NULL);
@@ -568,7 +568,7 @@ void* send_song(void * args){
     free(newPath); 
     free(data);
 
-    printF(GREEN, "Thread finished\n");
+    //printF(GREEN, "Thread finished\n");
 
     pthread_exit(NULL);
 }
@@ -577,7 +577,7 @@ void* send_list(void * args){
 
     thread_args *t_args = (thread_args *)args;
 
-    printF(GREEN, "Thread created -> sending %s\n", t_args->list_name);
+    //printF(GREEN, "Thread created -> sending %s\n", t_args->list_name);
 
     int newPathLength = strlen("..") + strlen(t_args->server_directory) + 1;
     char *newPath = malloc(newPathLength);
@@ -587,7 +587,7 @@ void* send_list(void * args){
 
     char *path = searchFolder(newPath, t_args->list_name);
     if (path) {
-        printF(GREEN,"Found: %s\n", path);
+        //printF(GREEN,"Found: %s\n", path);
     } else {
         printF(RED,"Playlist not found.\n");
         pthread_exit(NULL);
@@ -619,14 +619,14 @@ void* send_list(void * args){
                 pthread_join(t_args->download_song_thread, NULL);
             }
                 
-            printF(YELLOW, "Processing file: %s\n", dp->d_name);
+            //printF(YELLOW, "Processing file: %s\n", dp->d_name);
         }
         closedir(dir);
     } else {
         printF(RED, "Failed to open directory: %s\n", path);
     }
 
-    printF(GREEN, "Playlist descargada!\n");
+    //printF(GREEN, "Playlist descargada!\n");
 
     pthread_exit(NULL);
 
@@ -696,7 +696,7 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
         }
 
         total_bytes_sent += bytes_read;
-        printF(RED, "%ld / %ld\n", total_bytes_sent, file_size);
+        //printF(RED, "%ld / %ld\n", total_bytes_sent, file_size);
 
         free(data);
         free(buffer);
@@ -704,7 +704,7 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
         sleep(0.05);
     }
 
-    printF(GREEN, "File completed!\n");
+    //printF(GREEN, "File completed!\n");
     close(fd);
     free(id_char);
 }

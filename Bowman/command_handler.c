@@ -9,6 +9,8 @@ extern pthread_t listen_poole_thread;
 extern volatile sig_atomic_t bowman_sigint_received;
 extern thread_receive_frames *pargs;
 int msg_id;
+Song_Downloading *songsDownloading = NULL;
+int num_songs_downloading = 0;
 
 // Declaración de funciones
 void connect_to_server(int *psocket);
@@ -34,7 +36,9 @@ void printSongsInPlaylists(char *playlist, char playlistIndex);
 //Handle downloads
 void handleNewFile(char* data);
 void handleFileData(char* data);
+void clearDownloadedSongs();
 void parseSongInfo(const char *str, Song *song);
+void printAllSongsDownloading() ;
 
 /**
  * @brief Parse the command to remove the extra spaces
@@ -191,10 +195,8 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
             download(command + strlen("DOWNLOAD "));
           
         } else if (!strcasecmp(opcode, "CHECK DOWNLOADS")) {
-            /* 
-                Handle the CHECK DOWNLOADS
-            */
-           printF(WHITE, "Check downloads\n");
+            
+            printAllSongsDownloading();            
 
         } else if (!strcasecmp(opcode, "LIST SONGS")) {
             
@@ -203,6 +205,11 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
         } else if (!strcasecmp(opcode, "LIST PLAYLISTS")) {
 
             list_playlists();
+
+        } 
+        else if (!strcasecmp(opcode, "CLEAR DOWNLOADS")) {
+
+            clearDownloadedSongs();
 
         } else {
 
@@ -724,6 +731,76 @@ void handleFileData(char* data) {
     msg_queue_writer(msg_id, &msg);
 }
 
+void addSongToArray(Song newSong) {
+    Song_Downloading songDownloading;
+    songDownloading.song = newSong;
+    songDownloading.song_size = newSong.fileSize;
+    songDownloading.downloaded_bytes = 0;
+
+    if (songsDownloading == NULL) {
+        songsDownloading = malloc(sizeof(Song_Downloading));
+        if (songsDownloading == NULL) {
+            printF(RED, "Error al asignar memoria\n");
+            return;
+        }
+        num_songs_downloading = 1;
+    } else {
+        Song_Downloading *temp = realloc(songsDownloading, sizeof(Song_Downloading) * (num_songs_downloading + 1));
+        if (temp == NULL) {
+            printF(RED, "Error al realocar memoria\n");
+            return;
+        }
+        songsDownloading = temp;
+        num_songs_downloading++;
+    }
+    songsDownloading[num_songs_downloading - 1] = songDownloading;
+}
+
+void deleteSongFromArray(Song song){
+    int index = -1;
+    for (int i = 0; i < num_songs_downloading; i++) {
+        if (songsDownloading[i].song.id == song.id) {
+            index = i;
+            break;
+        }
+    }
+
+    if (index == -1) {
+        printF(RED, "Error al eliminar la canción del array\n");
+        return;
+    }
+
+    for (int i = index; i < num_songs_downloading - 1; i++) {
+        songsDownloading[i] = songsDownloading[i + 1];
+    }
+
+    num_songs_downloading--;
+
+    if (num_songs_downloading == 0) {
+        free(songsDownloading);
+        songsDownloading = NULL;
+    } else {
+        Song_Downloading *temp = realloc(songsDownloading, sizeof(Song_Downloading) * num_songs_downloading);
+        if (temp == NULL) {
+            printF(RED, "Error al realocar memoria\n");
+            return;
+        }
+        songsDownloading = temp;
+    }
+
+}
+
+void clearDownloadedSongs(){
+    printF(GREEN, "Limpiando canciones descargadas\n");
+    for (int i = 0; i < num_songs_downloading; i++) {
+        if (songsDownloading[i].downloaded_bytes == songsDownloading[i].song_size) {
+            printF(GREEN, "\t -%s eliminada de la lista\n", songsDownloading[i].song.fileName);
+            deleteSongFromArray(songsDownloading[i].song);
+            i--;
+        }
+    }
+}
+
 void* startSongDownload(void* args) {
     char* str = (char*)args; 
 
@@ -741,6 +818,8 @@ void* startSongDownload(void* args) {
     msg->msg_type = (long)newSong.id;
     long total_bytes_written = 0;
     ssize_t max_write_size = HEADER_MAX_SIZE - strlen("FILE_DATA") - 3 - 1; // 3 bytes para el ID + 1 byte para el '&'
+
+    addSongToArray(newSong);
     
     while (total_bytes_written < newSong.fileSize) {
         msg_queue_reader(msg_id, msg);
@@ -756,9 +835,18 @@ void* startSongDownload(void* args) {
         }
 
         total_bytes_written += written;
+
+        // Actualizar el número de bytes descargados
+        for (int i = 0; i < num_songs_downloading; i++) {
+            if (songsDownloading[i].song.id == newSong.id) {
+                songsDownloading[i].downloaded_bytes = total_bytes_written;
+                break;
+            }
+        }
+        
     }
 
-    printF(GREEN, "\nDescarga completada\n");
+    //printF(GREEN, "\nDescarga completada\n");
     close(fd);
     free(msg);
     free(str);
@@ -866,4 +954,38 @@ int disconnect_notification_to_discovery(char *username, char *discovery_ip, int
 
     close(sock);
     return EXIT_SUCCESS;
+}
+
+void printSongDownloading(Song_Downloading songDownloading) {
+
+    //todo conseguir porcentaje
+    float percentage = (float)songDownloading.downloaded_bytes / (float)songDownloading.song_size * 100;
+    //crear barra de progreso
+    char bar[101];
+    memset(bar, 0, sizeof(bar));
+    int i;
+    for (i = 0; i < percentage; i++) {
+        bar[i] = '=';
+    }
+    bar[i++] = '%';
+    for (; i < 100; i++) {
+        bar[i] = ' ';
+    }
+    bar[100] = '\0';
+
+    printF(GREEN, "%s [%s] %.2f%%\n", songDownloading.song.fileName, bar, percentage);
+
+}
+
+void printAllSongsDownloading() {
+
+    if (songsDownloading == NULL || num_songs_downloading == 0) {
+        printF(RED,"No hay canciones descargándose actualmente.\n");
+        return;
+    }
+
+    printF(GREEN,"Canciones descargándose:\n");
+    for (int i = 0; i < num_songs_downloading; i++) {
+        printSongDownloading(songsDownloading[i]);
+    }
 }
