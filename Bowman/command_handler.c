@@ -33,12 +33,14 @@ void handlePlaylistsResponse(char *data);
 int countPlaylists(const char *str);
 void print_playlists(char *to_print);
 void printSongsInPlaylists(char *playlist, char playlistIndex);
+void parseSongInfo(const char *str, Song *song);
 //Handle downloads
 void handleNewFile(char* data);
 void handleFileData(char* data);
-void clearDownloadedSongs();
-void parseSongInfo(const char *str, Song *song);
+//Handle Check downloads
 void printAllSongsDownloading() ;
+//Handle Clear downloads
+void clearDownloadedSongs();
 
 /**
  * @brief Parse the command to remove the extra spaces
@@ -564,7 +566,7 @@ void download(char *name){
         } 
     }
 
-    
+    printF(GREEN, "Download started!\n");
 }
 
 void *receive_frames(void *args) {

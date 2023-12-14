@@ -3,6 +3,8 @@
 
 #include "../global.h"
 
+#define MAX_SONGS_THREADS 20
+
 // Estructura para pasar los argumentos al thread
 typedef struct {
     int client_socket;

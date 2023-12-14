@@ -1,6 +1,10 @@
 #include "command_handler.h"
 
 extern volatile sig_atomic_t server_sigint_received;
+pthread_mutex_t send_frame_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t create_thread_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_t download_max_threads[MAX_SONGS_THREADS];
+static int download_max_threads_index = 0;
 
 //LIST SONGS FUNCTIONS
 void append_song(char **songs_list, char *song_name);
@@ -93,12 +97,12 @@ void *client_handler(void* args) {
             t_args->song_name = request_frame.header_plus_data + request_frame.header_length;
             t_args->is_song = 1;
             //Crear thread 
+            pthread_mutex_lock(&create_thread_mutex);
             if (pthread_create(&t_args->download_song_thread, NULL, send_song, (void *)t_args) != 0) {
                 printF(RED, "Error creating thread to download song\n");
                 return NULL;
-            } else {
-                pthread_join(t_args->download_song_thread, NULL);
             }
+            pthread_mutex_unlock(&create_thread_mutex);
         }
         else if(strncmp(request_frame.header_plus_data, "DOWNLOAD_LIST", request_frame.header_length) == 0) {
             printF(YELLOW,"\nNew request - %s wants to download the playlist %s\n", t_args->username, request_frame.header_plus_data + request_frame.header_length);
@@ -107,12 +111,12 @@ void *client_handler(void* args) {
             //Lanzar thread que gestione la descarga
             t_args->list_name = request_frame.header_plus_data + request_frame.header_length;
             //Crear thread 
+            pthread_mutex_lock(&create_thread_mutex);
             if (pthread_create(&t_args->download_playlist_thread, NULL, send_list, (void *)t_args) != 0) {
                 printF(RED, "Error creating thread to download playlist.\n");
                 return NULL;
-            } else {
-                pthread_join(t_args->download_playlist_thread, NULL);
             }
+            pthread_mutex_unlock(&create_thread_mutex);
         }
         //USER LOGOUT
         else if (strncmp(request_frame.header_plus_data, "EXIT", request_frame.header_length) == 0) {
@@ -126,10 +130,12 @@ void *client_handler(void* args) {
                 response_frame = frame_creator(0x06, "LOGOUT_KO", "");
             }
 
+            pthread_mutex_lock(&send_frame_mutex);
             if (send_frame(t_args->client_socket, &response_frame) < 0) {
                 printF(RED, "Error sending response frame to Bowman.\n");
                 return NULL;
             }
+            pthread_mutex_unlock(&send_frame_mutex);
 
             return NULL;
         }
@@ -225,11 +231,14 @@ void* list_songs_handler(void* args) {
     snprintf(list_length_str, sizeof(list_length_str), "%d", list_length);
 
     Frame list_length_frame = frame_creator(0x02, "LIST_SONGS_SIZE", list_length_str);
+
+    pthread_mutex_lock(&send_frame_mutex);
     if (send_frame(t_args->client_socket, &list_length_frame) < 0) {
         printF(RED, "Error sending list length frame to Bowman.\n");
         free(songs_list);
         return NULL;
     }
+    pthread_mutex_unlock(&send_frame_mutex);
 
     //Empezar a mandar la lista de canciones (HEADER = SONGS_RESPONSE)
     while (offset < list_length) {
@@ -240,11 +249,13 @@ void* list_songs_handler(void* args) {
 
         Frame response_frame = frame_creator(0x02, "SONGS_RESPONSE", data_segment);
         //printF(YELLOW, "Sending frame: %s\n", response_frame.header_plus_data);
+        pthread_mutex_lock(&send_frame_mutex);
         if (send_frame(t_args->client_socket, &response_frame) < 0) {
             printF(RED, "Error sending response frame to Bowman.\n");
             free(songs_list);
             return NULL;
         }
+        pthread_mutex_unlock(&send_frame_mutex);
         offset += data_length;
     }
 
@@ -349,11 +360,13 @@ void* list_playlists_handler(void* args) {
     snprintf(list_length_str, sizeof(list_length_str), "%d", list_length);
 
     Frame list_length_frame = frame_creator(0x02, "LIST_PLAYLISTS_SIZE", list_length_str);
+    pthread_mutex_lock(&send_frame_mutex);
     if (send_frame(t_args->client_socket, &list_length_frame) < 0) {
         printF(RED, "Error sending list length frame to Bowman.\n");
         free(playlists_list);
         return NULL;
     }
+    pthread_mutex_unlock(&send_frame_mutex);
 
     //Empezar a mandar la lista de canciones (HEADER = PLAYLISTS_RESPONSE)
     while (offset < list_length) {
@@ -364,11 +377,13 @@ void* list_playlists_handler(void* args) {
 
         Frame response_frame = frame_creator(0x02, "PLAYLISTS_RESPONSE", data_segment);
         printF(YELLOW, "Sending frame: %s\n", response_frame.header_plus_data);
+        pthread_mutex_lock(&send_frame_mutex);
         if (send_frame(t_args->client_socket, &response_frame) < 0) {
             printF(RED, "Error sending response frame to Bowman.\n");
             free(playlists_list);
             return NULL;
         }
+        pthread_mutex_unlock(&send_frame_mutex);
         offset += data_length;
     }
 
@@ -515,7 +530,9 @@ off_t getFileSize(const char *filePath) {
     }
 }
 
-void* send_song(void * args){
+void* send_song(void * args) {
+    pthread_mutex_lock(&create_thread_mutex);
+
     thread_args *t_args = (thread_args *)args;
 
     //printF(GREEN, "Thread created -> sending %s\n", t_args->song_name);
@@ -555,12 +572,12 @@ void* send_song(void * args){
     sprintf(data, "%s&%lu&%s&%d", file_name, file_size, md5sum, id);
 
     Frame new_song = frame_creator(0x04, "NEW_FILE", data);
-
+    pthread_mutex_lock(&send_frame_mutex);
     if (send_frame(t_args->client_socket, &new_song) < 0) {
         printF(RED, "Error sending NEW_FILE frame to %s.\n", t_args->username);
         pthread_exit(NULL);
     } 
-
+    pthread_mutex_unlock(&send_frame_mutex);
     empezar_envio(*t_args, id, path, file_size);   
 
     free(path);
@@ -597,28 +614,30 @@ void* send_list(void * args){
     if (dir) {
         struct dirent *dp;
         while ((dp = readdir(dir)) != NULL) {
-
+            
             if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0) {
                 continue;
             }
 
+
+            pthread_mutex_lock(&create_thread_mutex);
             t_args->song_name = dp->d_name;
             t_args->is_song = 0;
 
             //Playlist - Song Name
+            
             int size = strlen(t_args->list_name) + strlen(t_args->song_name) + strlen(" - ") + 1;
             t_args->playlist_name = malloc(size);
 
             // Formateando el string con el nuevo formato
             snprintf(t_args->playlist_name, size, "%s - %s", t_args->list_name, t_args->song_name);
-
-            if (pthread_create(&t_args->download_song_thread, NULL, send_song, (void *)t_args) != 0) {
+            if (pthread_create(&download_max_threads[download_max_threads_index], NULL, send_song, (void *)t_args) != 0) {
                 printF(RED, "Error creating thread to download song\n");
                 return NULL;
-            } else {
-                pthread_join(t_args->download_song_thread, NULL);
             }
-                
+            download_max_threads_index++;
+            pthread_mutex_unlock(&create_thread_mutex);
+            sleep(0.05);
             //printF(YELLOW, "Processing file: %s\n", dp->d_name);
         }
         closedir(dir);
@@ -686,6 +705,7 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
 
         Frame file_data = frame_creator(0x04, "FILE_DATA", data);
 
+        pthread_mutex_lock(&send_frame_mutex);
         if (send_frame(t_args.client_socket, &file_data) < 0) {
             printF(RED, "Error sending FILE_DATA frame to %s.\n", t_args.username);
             free(data);
@@ -694,6 +714,7 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
             free(id_char);
             return;
         }
+        pthread_mutex_unlock(&send_frame_mutex);
 
         total_bytes_sent += bytes_read;
         //printF(RED, "%ld / %ld\n", total_bytes_sent, file_size);
