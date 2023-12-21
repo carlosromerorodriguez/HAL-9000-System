@@ -108,6 +108,9 @@ void free_all_dynamic_memory(void) {
 void kctrlc(int signum) {
     if (signum == SIGINT) {
         printF(RED, "\n\nKCRTL+C received. Exiting...\n");
+
+        freeSongDownloadingArray();
+
         bowman_sigint_received = 1;
         if (connected == 1) {
             logout(bowman_config->username);

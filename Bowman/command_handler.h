@@ -10,6 +10,20 @@ typedef struct {
     int discovery_port;
 } thread_receive_frames;
 
+typedef struct {
+    char *fileName;
+    long fileSize;
+    char *md5sum;
+    int id;
+} Song;
+
+typedef struct {
+    Song song;
+    long downloaded_bytes;
+    long song_size;
+    pthread_t thread_id;
+} Song_Downloading;
+
 /**
  * @brief Handle the command received from the user
  * 
@@ -28,5 +42,7 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
  * @return EXIT_SUCCESS si el logout es exitoso, EXIT_FAILURE en caso contrario
 */
 int logout(char *username);
+
+void freeSongDownloadingArray();
 
 #endif

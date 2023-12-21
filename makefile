@@ -2,7 +2,7 @@ CC = gcc -g
 CFLAGS = -Wall -Wextra -Iinclude
 LDFLAGS = -lpthread
 BOWMAN_OBJS = Bowman/bowman.o Bowman/config.o Bowman/command_handler.o global.o 
-POOLE_OBJS = Poole/poole.o Poole/config.o Poole/command_handler.o global.o
+POOLE_OBJS = Poole/poole.o Poole/config.o Poole/command_handler.o Poole/monolit.o global.o
 DISCOVERY_OBJS = Discovery/discovery.o Discovery/config.o global.o
 
 # Regla por defecto
@@ -37,6 +37,9 @@ Poole/config.o: Poole/config.c Poole/config.h
 	$(CC) $(CFLAGS) -c $< -o $@ $(LDFLAGS)
 
 Poole/command_handler.o: Poole/command_handler.c Poole/command_handler.h
+	$(CC) $(CFLAGS) -c $< -o $@ $(LDFLAGS)
+
+Poole/monolit.o: Poole/monolit.c Poole/monolit.h
 	$(CC) $(CFLAGS) -c $< -o $@ $(LDFLAGS)
 
 global.o: global.c global.h

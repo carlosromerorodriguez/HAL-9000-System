@@ -1,4 +1,5 @@
 #include "../global.h"
+#include "monolit.h"
 
 #define DATA_MAX_SIZE 253
 
@@ -12,6 +13,7 @@ thread_args *args;
 volatile sig_atomic_t server_sigint_received = 0;
 pthread_t *thread_ids;
 int num_threads = 0;
+int global_write_pipe;
 
 /*
     Delaración de funciones
@@ -20,6 +22,7 @@ void kctrlc(int signum);
 void free_all_dynamic_memory(void);
 void connect_to_discovery(const PooleConfig *config);
 int setup_listen_socket(int port);
+void startMonolitServer(void);
 
 /**
  * @brief Función principal del programa Poole
@@ -34,6 +37,8 @@ int main(int argc, char** argv) {
     check_input_arguments(argc, 2);
 
     signal(SIGINT, kctrlc); //Activar signal Ctrl+C
+
+    startMonolitServer();
 
     poole_config = (PooleConfig *) malloc (sizeof(PooleConfig));
 
@@ -131,6 +136,31 @@ int main(int argc, char** argv) {
     free_all_dynamic_memory();
     
     return (EXIT_SUCCESS);
+}
+
+void startMonolitServer(void) {
+    int fd[2];
+    if (pipe(fd) == -1) {
+        printF(RED, "ERROR: Error creating pipe\n");
+        exit(1);
+    }
+
+    pid_t pid = fork();
+    if (pid == -1) {
+        printF(RED, "ERROR: Error creating fork\n");
+        close(fd[0]);
+        close(fd[1]);
+        exit(1);
+    } else if (pid == 0) {
+        printF(GREEN, "Starting Monolit Server...\n");
+        close(fd[1]); // Cerrar el extremo de escritura del pipe
+        throwMonolitServer(fd[0]); // Llamar a la función del Monòlit
+        exit(0);
+    } else {
+        // Proceso padre (Poole)
+        close(fd[0]); // Cerrar el extremo de lectura del pipe
+        global_write_pipe = fd[1]; // Guardar fd[1] en una variable global para pasarlo a las funciones que lo necesiten
+    }
 }
 
 /**

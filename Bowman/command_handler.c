@@ -33,14 +33,12 @@ void handlePlaylistsResponse(char *data);
 int countPlaylists(const char *str);
 void print_playlists(char *to_print);
 void printSongsInPlaylists(char *playlist, char playlistIndex);
-void parseSongInfo(const char *str, Song *song);
 //Handle downloads
 void handleNewFile(char* data);
 void handleFileData(char* data);
-//Handle Check downloads
-void printAllSongsDownloading() ;
-//Handle Clear downloads
 void clearDownloadedSongs();
+void parseSongInfo(const char *str, Song *song);
+void printAllSongsDownloading() ;
 
 /**
  * @brief Parse the command to remove the extra spaces
@@ -710,13 +708,15 @@ void handleNewFile(char* data) {
         }
         return;
     }
+
+    free(data_copy);
 }
 
 void handleFileData(char* data) {
     // ID (3 bytes [0-999]) + '&' + '\0'
     char id_str[4];
     memcpy(id_str, data, 3);
-    id_str[4] = '\0';
+    id_str[3] = '\0';
 
     long id = strtol(id_str, NULL, 10);
 
@@ -733,11 +733,12 @@ void handleFileData(char* data) {
     msg_queue_writer(msg_id, &msg);
 }
 
-void addSongToArray(Song newSong) {
+void addSongToArray(Song newSong, pthread_t thread_id) {
     Song_Downloading songDownloading;
     songDownloading.song = newSong;
     songDownloading.song_size = newSong.fileSize;
     songDownloading.downloaded_bytes = 0;
+    songDownloading.thread_id = thread_id;
 
     if (songsDownloading == NULL) {
         songsDownloading = malloc(sizeof(Song_Downloading));
@@ -758,7 +759,7 @@ void addSongToArray(Song newSong) {
     songsDownloading[num_songs_downloading - 1] = songDownloading;
 }
 
-void deleteSongFromArray(Song song){
+void deleteSongFromArray(Song song) {
     int index = -1;
     for (int i = 0; i < num_songs_downloading; i++) {
         if (songsDownloading[i].song.id == song.id) {
@@ -772,6 +773,11 @@ void deleteSongFromArray(Song song){
         return;
     }
 
+    // Liberar la memoria dinámica de la canción que se va a eliminar
+    free(songsDownloading[index].song.fileName);
+    free(songsDownloading[index].song.md5sum);
+
+    // Reorganizar el arreglo
     for (int i = index; i < num_songs_downloading - 1; i++) {
         songsDownloading[i] = songsDownloading[i + 1];
     }
@@ -789,7 +795,21 @@ void deleteSongFromArray(Song song){
         }
         songsDownloading = temp;
     }
+}
 
+void freeSongDownloadingArray() {
+    if (songsDownloading != NULL) {
+        for (int i = 0; i < num_songs_downloading; i++) {
+            free(songsDownloading[i].song.fileName);
+            free(songsDownloading[i].song.md5sum);
+            if (songsDownloading[i].downloaded_bytes < songsDownloading[i].song_size) {
+                pthread_join(songsDownloading[i].thread_id, NULL);
+            }
+        }
+        free(songsDownloading);
+        songsDownloading = NULL;
+        num_songs_downloading = 0;
+    }
 }
 
 void clearDownloadedSongs(){
@@ -821,13 +841,13 @@ void* startSongDownload(void* args) {
     long total_bytes_written = 0;
     ssize_t max_write_size = HEADER_MAX_SIZE - strlen("FILE_DATA") - 3 - 1; // 3 bytes para el ID + 1 byte para el '&'
 
-    addSongToArray(newSong);
+    addSongToArray(newSong, pthread_self());
     
-    while (total_bytes_written < newSong.fileSize) {
+    while (total_bytes_written < newSong.fileSize && !bowman_sigint_received) {
         msg_queue_reader(msg_id, msg);
 
         // Calcular cuántos bytes se deben escribir en esta iteración
-        size_t bytes_to_write = (total_bytes_written + max_write_size < newSong.fileSize) ? max_write_size : (newSong.fileSize - total_bytes_written);
+        size_t bytes_to_write = (total_bytes_written + max_write_size <= newSong.fileSize) ? max_write_size : (newSong.fileSize - total_bytes_written);
         //size_t bytes_to_write = sizeof(msg->msg_text);
 
         int written = write(fd, msg->msg_text, bytes_to_write);

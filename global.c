@@ -133,17 +133,8 @@ Frame frame_creator(char type, char* header, char* data) {
     frame.type = type;
     frame.header_length = strlen(header);
     
-    if (strcmp(header, "FILE_DATA") == 0) {
-        memcpy(frame.header_plus_data, header, frame.header_length);
-
-        int data_length = HEADER_MAX_SIZE - strlen("FILE_DATA"); // (0-999)
-        // Copiar los datos binarios directamente.
-        memcpy(frame.header_plus_data + frame.header_length, data, data_length);
-        //printF(GREEN, "Data Frame Creator: %s\n", frame.header_plus_data);
-    } else {
-        snprintf(frame.header_plus_data, frame.header_length + 1, "%s", header);
-        snprintf(frame.header_plus_data + frame.header_length, HEADER_MAX_SIZE - frame.header_length, "%s", data);
-    }
+    snprintf(frame.header_plus_data, frame.header_length + 1, "%s", header);
+    snprintf(frame.header_plus_data + frame.header_length, HEADER_MAX_SIZE - frame.header_length, "%s", data);
 
     return frame;
 }
@@ -230,9 +221,9 @@ void msg_queue_delete(int msg_id) {
 }
 
 char* intToStr(int num) {
-    // Estimar el tamaño máximo de la representación del número.
     int length = 0;
     int temp = num;
+
     if (num == 0) {
         length = 1;
     } else {
@@ -242,18 +233,18 @@ char* intToStr(int num) {
         }
     }
 
-    // Reservar memoria para la cadena sin contar el '\0'.
-    char *str = (char *)malloc(length * sizeof(char));
+    char *str = (char *)malloc((length + 1) * sizeof(char)); // +1 para '\0'
     if (str == NULL) {
         perror("Error al asignar memoria");
         return NULL; 
     }
 
-    // Convertir cada dígito a char y almacenar en la cadena.
     for (int i = length - 1; i >= 0; i--) {
         str[i] = (num % 10) + '0';
         num /= 10;
     }
+
+    str[length] = '\0';
 
     return str;
 }

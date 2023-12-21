@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "command_handler.h": "c",
+        "global.h": "c",
+        "config.h": "c"
+    }
+}
