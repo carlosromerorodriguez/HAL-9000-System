@@ -74,6 +74,8 @@ void *client_handler(void* args) {
             if (pthread_create(&t_args->list_songs_thread, NULL, list_songs_handler, (void *)t_args) != 0) {
                 printF(RED, "Error creating thread to list songs.\n");
                 return NULL;
+            }else{
+                pthread_detach(t_args->list_songs_thread);
             }
         }
         // LIST PLAYLISTS
@@ -85,7 +87,9 @@ void *client_handler(void* args) {
             if (pthread_create(&t_args->list_playlists_thread, NULL, list_playlists_handler, (void *)t_args) != 0) {
                 printF(RED, "Error creating thread to list playlists.\n");
                 return NULL;
-            }
+            }else{
+                pthread_detach(t_args->list_playlists_thread);
+            }  
         }
         //DOWNLOAD SONG
         else if(strncmp(request_frame.header_plus_data, "DOWNLOAD_SONG", request_frame.header_length) == 0) {
@@ -100,6 +104,9 @@ void *client_handler(void* args) {
                 printF(RED, "Error creating thread to download song\n");
                 return NULL;
             }
+            else{
+                pthread_detach(t_args->download_song_thread);
+            }
         }
         else if(strncmp(request_frame.header_plus_data, "DOWNLOAD_LIST", request_frame.header_length) == 0) {
             printF(YELLOW,"\nNew request - %s wants to download the playlist %s\n", t_args->username, request_frame.header_plus_data + request_frame.header_length);
@@ -107,10 +114,13 @@ void *client_handler(void* args) {
 
             //Lanzar thread que gestione la descarga
             t_args->list_name = request_frame.header_plus_data + request_frame.header_length;
+            t_args->is_song = 0;
             //Crear thread 
             if (pthread_create(&t_args->download_playlist_thread, NULL, send_list, (void *)t_args) != 0) {
                 printF(RED, "Error creating thread to download playlist.\n");
                 return NULL;
+            }else{
+                pthread_detach(t_args->download_playlist_thread);
             }
         }
         //USER LOGOUT
@@ -470,7 +480,6 @@ char* searchFolder(const char *basePath, const char *folderName) {
     return path;
 }
 
-
 char* getFileMD5(char *filePath) {
     int pipefd[2];
     pid_t pid;
@@ -541,6 +550,8 @@ void* send_song(void * args){
         //printF(GREEN,"Found: %s\n", path);
     } else {
         printF(RED,"Song not found.\n");
+        free(path);
+        free(newPath);
         pthread_exit(NULL);
     }
 
@@ -548,6 +559,9 @@ void* send_song(void * args){
     off_t file_size = getFileSize(path);
     if (file_size < 0) {
         printF(RED, "Error getting file size.\n");
+        free(path);
+        free(md5sum);
+        free(newPath);
         pthread_exit(NULL);
     }
 
@@ -557,11 +571,13 @@ void* send_song(void * args){
     
     pthread_mutex_unlock(&write_pipe_mutex);
 
-    char *file_name;
+    char *file_name = NULL;
 
     if (t_args->is_song) {
+        printF(GREEN, "filename is songname: %s\n", t_args->song_name);
         file_name = t_args->song_name;
     } else {
+        printF(GREEN, "filename is playlistname: %s\n", t_args->playlist_name);
         file_name = t_args->playlist_name;
     }
 
@@ -575,6 +591,9 @@ void* send_song(void * args){
     pthread_mutex_lock(&send_frame_mutex);
     if (send_frame(t_args->client_socket, &new_song) < 0) {
         printF(RED, "Error sending NEW_FILE frame to %s.\n", t_args->username);
+        free(path);
+        free(md5sum);
+        free(newPath);
         pthread_exit(NULL);
     } 
     pthread_mutex_unlock(&send_frame_mutex);
@@ -585,9 +604,15 @@ void* send_song(void * args){
     free(newPath); 
     free(data);
 
+    if (!t_args->is_song) {
+        free(t_args->song_name);
+        free(t_args->playlist_name);
+        free(t_args);
+    }
+    pthread_exit(NULL);
+
     //printF(GREEN, "Thread finished\n");
 
-    pthread_exit(NULL);
 }
 
 void* send_list(void * args) {
@@ -595,6 +620,10 @@ void* send_list(void * args) {
 
     int newPathLength = strlen("..") + strlen(t_args->server_directory) + 1;
     char *newPath = malloc(newPathLength);
+    if (!newPath) {
+        printF(RED, "Failed to allocate memory for newPath.\n");
+        pthread_exit(NULL);
+    }
 
     strcpy(newPath, "..");
     strcat(newPath, t_args->server_directory);
@@ -609,42 +638,50 @@ void* send_list(void * args) {
     DIR *dir = opendir(path);
     if (!dir) {
         printF(RED, "Failed to open directory: %s\n", path);
-        free(newPath);
         free(path);
         pthread_exit(NULL);
     }
 
     struct dirent *dp;
     while ((dp = readdir(dir)) != NULL) {
+
         if (strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0) {
             continue;
         }
 
-        // Crear una nueva estructura de argumentos para cada thread
         thread_args *new_t_args = malloc(sizeof(thread_args));
         if (!new_t_args) {
             printF(RED, "Error allocating memory for new thread arguments.\n");
             continue;
         }
 
-        *new_t_args = *t_args; // Copiar los datos existentes
+        *new_t_args = *t_args; // Copy the existing data
 
         new_t_args->song_name = strdup(dp->d_name);
-        new_t_args->is_song = 0;
+        if (!new_t_args->song_name) {
+            free(new_t_args);
+            continue;
+        }
 
         int size = strlen(t_args->list_name) + strlen(dp->d_name) + strlen(" - ") + 1;
         new_t_args->playlist_name = malloc(size);
+        if (!new_t_args->playlist_name) {
+            free(new_t_args->song_name);
+            free(new_t_args);
+            continue;
+        }
         snprintf(new_t_args->playlist_name, size, "%s - %s", t_args->list_name, dp->d_name);
 
-        // Crear y lanzar el thread
         if (pthread_create(&new_t_args->download_song_thread, NULL, send_song, (void *)new_t_args) != 0) {
             printF(RED, "Error creating thread to download song\n");
             free(new_t_args->song_name);
             free(new_t_args->playlist_name);
             free(new_t_args);
         } else {
+            // It's assumed that send_song will take care of freeing new_t_args and its contents
             pthread_detach(new_t_args->download_song_thread);
         }
+
     }
 
     closedir(dir);
@@ -652,6 +689,7 @@ void* send_list(void * args) {
     free(path);
     pthread_exit(NULL);
 }
+
 
 void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
     char *id_char = intToStr(id);
