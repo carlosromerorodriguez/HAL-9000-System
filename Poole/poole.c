@@ -14,6 +14,7 @@ volatile sig_atomic_t server_sigint_received = 0;
 pthread_t *thread_ids;
 int num_threads = 0;
 int global_write_pipe;
+volatile sig_atomic_t poole_sigint_received = 0;
 
 /*
     Delaración de funciones
@@ -326,6 +327,9 @@ int setup_listen_socket(int port) {
  * @return void
 */
 void kctrlc(int signum) {
+
+    poole_sigint_received = 1;
+
     if (signum == SIGINT) {
         server_sigint_received = 1;
         free_all_dynamic_memory();

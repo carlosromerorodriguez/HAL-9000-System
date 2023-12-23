@@ -4,6 +4,7 @@ extern volatile sig_atomic_t server_sigint_received;
 pthread_mutex_t send_frame_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t write_pipe_mutex = PTHREAD_MUTEX_INITIALIZER;
 extern int global_write_pipe;
+extern volatile sig_atomic_t poole_sigint_received;
 
 //LIST SONGS FUNCTIONS
 void append_song(char **songs_list, char *song_name);
@@ -690,7 +691,6 @@ void* send_list(void * args) {
     pthread_exit(NULL);
 }
 
-
 void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
     char *id_char = intToStr(id);
     int id_length = strlen(id_char);
@@ -705,7 +705,7 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
     long total_bytes_sent = 0;
     ssize_t max_bytes_to_send = HEADER_MAX_SIZE - strlen("FILE_DATA") - id_length - 1;
     
-    while (total_bytes_sent <= file_size) {
+    while (total_bytes_sent <= file_size && !poole_sigint_received) {
         // Calcula el tamaño del buffer para esta iteración
         size_t buffer_size = ((total_bytes_sent + max_bytes_to_send) <= (file_size)) ? max_bytes_to_send : (file_size - total_bytes_sent);
 

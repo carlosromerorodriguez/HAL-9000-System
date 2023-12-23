@@ -113,7 +113,9 @@ int main(int argc, char* argv[]) {
             *client_fd_ptr = client_fd;
             if (pthread_create(&bowman_thread_id, NULL, handleBowmanConnection, client_fd_ptr) == 0) {
                 bowman_thread_created = 1;
+                pthread_detach(bowman_thread_id);
             }
+        
         }
 
         usleep(10000); // Esperar 10ms (pequeño retardo para reducir el uso de CPU)
