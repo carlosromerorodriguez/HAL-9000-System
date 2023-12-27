@@ -11,6 +11,10 @@ extern thread_receive_frames *pargs;
 int msg_id;
 Song_Downloading *songsDownloading = NULL;
 int num_songs_downloading = 0;
+int discovery_socket;
+char *username;
+char *discovery_ip;
+int *psocket;
 
 // Declaración de funciones
 void connect_to_server(int *psocket);
@@ -39,6 +43,7 @@ void handleFileData(char* data);
 void clearDownloadedSongs();
 void parseSongInfo(const char *str, Song *song);
 void printAllSongsDownloading() ;
+int connect_to_another_server(char *username, char *discovery_ip, int port, int *psocket);
 
 /**
  * @brief Parse the command to remove the extra spaces
@@ -100,6 +105,10 @@ static char *trim_whitespace(char* str) {
 unsigned char handle_bowman_command(char *command, unsigned char *connected, int *discovery_socket, char *username, char *discovery_ip, int discovery_port, int *psocket) {
 
     command = trim_whitespace(command);
+    discovery_socket = discovery_socket;
+    username = username;
+    discovery_ip = discovery_ip;
+    psocket = psocket;
 
     if (command == NULL || command[0] == '\0') {
         printF(RED, "ERROR: Please input a valid command.\n");
@@ -109,6 +118,7 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
     char *opcode = parse_command(command);
 
     if (!*connected) {
+        
         if (!strcasecmp(opcode, "CONNECT")) {
 
             *discovery_socket = connect_to_discovery(username, discovery_ip, discovery_port);
@@ -172,7 +182,7 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
                 return EXIT_FAILURE;
             }
 
-        } else if (strcasecmp(opcode, "LOGOUT") == 0) { //PREGUNTAR SI SE PUEDE SALIR SIN ESTAR CONECTADO
+        } else if (strcasecmp(opcode, "LOGOUT") == 0) { 
             printF(GREEN, "Thanks for using HAL 9000, see you soon, music lover!\n");
             free(opcode);
             return 1;
@@ -217,6 +227,8 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
         }
     }
     
+    
+
     free(opcode);
     return EXIT_SUCCESS;
 }
@@ -229,6 +241,7 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
  * @return void 
 */
 void connect_to_server(int *psocket) {
+
     poole_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (poole_socket < 0) {
         perror("Error creating socket");
@@ -252,6 +265,8 @@ void connect_to_server(int *psocket) {
     }
 
     *psocket = poole_socket;
+
+
 }
 
 /**
@@ -261,11 +276,14 @@ void connect_to_server(int *psocket) {
  * @return int Descriptor del socket si la conexión es exitosa, EXIT_FAILURE en caso de error
 */
 int connect_to_discovery(char *username, char *discovery_ip, int discovery_port) {
+    
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
         printF(RED, "Socket creation failed\n");
         return EXIT_FAILURE;
     }
+
+    printF(GREEN, "Connecting to Discovery server at IP %s and port %d\n", discovery_ip, discovery_port);
 
     struct sockaddr_in discovery_addr;
     memset(&discovery_addr, 0, sizeof(discovery_addr));
@@ -278,6 +296,8 @@ int connect_to_discovery(char *username, char *discovery_ip, int discovery_port)
         close(sock);
         return EXIT_FAILURE;
     }
+
+    printF(GREEN, "Connected to Discovery server\n");
 
     // Construir y enviar trama NEW_BOWMAN
     Frame request_frame = frame_creator(0x01, "NEW_BOWMAN", username);
@@ -300,7 +320,12 @@ int connect_to_discovery(char *username, char *discovery_ip, int discovery_port)
         // Procesar y almacenar la información del servidor Poole
         char *data = response_frame.header_plus_data + response_frame.header_length;
         parse_and_store_server_info(data);
-    } else {
+        close(sock);
+    }else if(strncmp(response_frame.header_plus_data, "CON_KO", response_frame.header_length) == 0){
+        close(sock);
+        return EXIT_FAILURE;
+    }
+    else {
         printF(RED, "Connection to Discovery failed: %s\n", response_frame.header_plus_data);
         close(sock);
         return EXIT_FAILURE;
@@ -602,6 +627,22 @@ void *receive_frames(void *args) {
         else if (!strncasecmp(response_frame.header_plus_data , "LOGOUT_KO", response_frame.header_length)) {
             printF(RED, "Logout failed\n");
             pthread_exit(NULL);
+        }
+        else if (!strncasecmp(response_frame.header_plus_data , "POOLE_SHUTDOWN", response_frame.header_length)) {
+
+            Frame logout_frame = frame_creator(0x06, "SHUTDOWN_OK", "");
+
+            if (send_frame(poole_socket, &logout_frame) < 0) {
+                printF(RED, "Error sending SHUTDOWN_OK frame to Poole server.\n");
+                pthread_exit(NULL);
+            } 
+
+            close(*trf.poole_socket);
+            if(!connect_to_another_server(trf.username, trf.discovery_ip, trf.discovery_port, trf.poole_socket)){
+                printF(RED, "Error connecting to another server. No Pooles available\n");
+                pthread_exit(NULL);
+            }
+            
         }
         else if (!strncasecmp(response_frame.header_plus_data , "UNKNOWN", response_frame.header_length)) {
  
@@ -1010,4 +1051,59 @@ void printAllSongsDownloading() {
     for (int i = 0; i < num_songs_downloading; i++) {
         printSongDownloading(songsDownloading[i]);
     }
+}
+
+int connect_to_another_server(char *username, char *discovery_ip, int port, int *psocket){
+
+    discovery_socket = connect_to_discovery(username, discovery_ip, port);
+    if (discovery_socket == EXIT_FAILURE) {
+        printF(RED, "Failed to connect to Discovery server\n");
+        return 0;
+    }
+    
+    connect_to_server(psocket);
+    if (*psocket == EXIT_FAILURE) {
+        printF(RED, "Failed to connect to Poole server\n");
+        return 0;
+    }
+
+    Frame response_frame = frame_creator(0x01, "NEW_BOWMAN", username);
+    if (send_frame(poole_socket, &response_frame) < 0) {
+        printF(RED, "Failed to send NEW_BOWMAN frame\n");
+        close(poole_socket);
+        return 0;
+    }
+
+    Frame request_frame;
+    if (receive_frame(poole_socket, &request_frame) <= 0) {
+        printF(RED, "Error receiving frame from Bowman. Connection aborted.\n");
+        close(poole_socket);
+        return 0;
+    }
+    if (strncmp(request_frame.header_plus_data, "CON_KO", request_frame.header_length) == 0) {
+        printF(RED, "Connection failed with Poole");
+        return 0;
+    }
+    printF(GREEN, "%s connected to HAL 9000 system, welcome music lover!\n", username);
+    printF(GREEN, "Connected to Poole server [%s] at IP %s and port %d\n", global_server_name, global_server_ip, global_server_port);
+    //Crear la cola de mensajes
+    msg_id = msgget(IPC_PRIVATE, 0600 | IPC_CREAT);
+    if (msg_id == -1) {
+        printF(RED, "Error creating message queue\n");
+        return 0;
+    }
+
+            //Lanzar el thread que escucha las tramas del servidor Poole
+    pargs = malloc (sizeof(thread_receive_frames));
+    pargs->poole_socket = psocket;
+    pargs->username = username;
+    pargs->discovery_ip = discovery_ip;
+    pargs->discovery_port = port;
+
+    if (pthread_create(&listen_poole_thread, NULL, receive_frames, pargs) != 0) {
+        printF(RED, "Error creating thread to receive frames.\n");
+        return 0;
+    }
+
+    return 1;
 }

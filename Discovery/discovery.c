@@ -35,6 +35,7 @@ PooleServer* find_least_loaded_poole_server();
 void logout_user( char* data, int bowman_socket);
 void free_all_dynamic_memory(void);
 void kctrlc(int signum);
+void delete_poole_from_list(char* server_name);
 
 
 /**
@@ -173,17 +174,27 @@ void* handlePooleConnection(void* arg) {
             // Enviar trama CON_OK a Poole
             Frame response_frame = frame_creator(0x01, "CON_OK", "");
             send_frame(poole_socket, &response_frame);
+            printF(YELLOW, "%s ->", fecha);
+            printF(GREEN, " New connection from Poole\n");
         } else {
             // Enviar trama CON_KO a Poole si hay algún error
             Frame response_frame = frame_creator(0x01, "CON_KO", "");
             send_frame(poole_socket, &response_frame);
         }
-    } else {
+    }
+    else if (strncmp(request_frame.header_plus_data, "POOLE_SHUTDOWN", request_frame.header_length) == 0) {
+        // Enviar trama CON_KO a Poole
+        Frame response_frame = frame_creator(0x01, "CON_KO", "");
+        send_frame(poole_socket, &response_frame);
+
+        // Cerrar el socket de Poole
+        close(poole_socket);
+        
+        delete_poole_from_list(request_frame.header_plus_data + request_frame.header_length);
+    } 
+    else {
         printF(RED, "Received unexpected frame header from Poole.\n");
     }
-
-    printF(YELLOW, "%s ->", fecha);
-    printF(GREEN, " New connection from Poole\n");
 
     close(poole_socket);
     pthread_exit(NULL);
@@ -388,6 +399,8 @@ void free_all_dynamic_memory(void) {
     }
 }
 
+
+
 /**
  * @brief Función que se ejecuta cuando se pulsa Ctrl+C
  * 
@@ -410,4 +423,45 @@ void kctrlc(int signum) {
         free_all_dynamic_memory();
     }
     exit(EXIT_SUCCESS);
+}
+
+void delete_poole_from_list(char* data){
+
+    char *server_name = strtok(data, "&");
+
+    PooleServer* current = poole_servers_head;
+    PooleServer* prev = NULL;
+
+    while (current != NULL) {
+        if (strcmp(current->server_name, server_name) == 0) {
+            if (prev == NULL) {
+                poole_servers_head = current->next;
+            } else {
+                prev->next = current->next;
+            }
+            free(current->server_name);
+            free(current->ip_address);
+            for (int i = 0; i < current->connected_users; i++) {
+                free(current->usernames[i]);
+            }
+            free(current->usernames);
+            free(current);
+            break;
+        }
+        prev = current;
+        current = current->next;
+    }
+
+    //lista de pooles printada:
+
+    current = poole_servers_head;
+
+    printF(YELLOW, "%s -> ", fecha);
+    printF(RED, "%s has been deleted from the list of Poole servers\n", server_name);
+
+    printF(GREEN, "Servers available:\n");
+    while (current != NULL) {
+        printF(GREEN, "    %s\n", current->server_name);
+        current = current->next;
+    }
 }

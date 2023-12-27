@@ -25,6 +25,7 @@ long getFileSize(const char *filePath);
 void* send_song(void * args);
 void* send_list(void * args);
 void empezar_envio(thread_args t_args, int id, char* path, long file_size);
+void server_shutdown(int client_socket);
 
 /**
  * @brief Maneja la conexion con Bowman y el envio de comandos
@@ -34,6 +35,7 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size);
  * @return NULL
 */
 void *client_handler(void* args) {
+    
     thread_args *t_args = (thread_args*)args;
 
     if (t_args == NULL) {
@@ -146,6 +148,9 @@ void *client_handler(void* args) {
             return NULL;
         }
     }
+
+    server_shutdown(t_args->client_socket);
+
     return NULL;
 }
 
@@ -781,4 +786,35 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
     //printF(GREEN, "File completed!\n");
     close(fd);
     free(id_char);
+}
+
+
+void server_shutdown(int client_socket) {
+    
+    Frame shutdown_frame = frame_creator(0x06, "POOLE_SHUTDOWN", "");
+
+    pthread_mutex_lock(&send_frame_mutex);
+    if (send_frame(client_socket, &shutdown_frame) < 0) {
+        printF(RED, "Error sending response frame to Bowman.\n");
+        return;
+    }
+    pthread_mutex_unlock(&send_frame_mutex);
+
+    Frame response_frame;
+    if (receive_frame(client_socket, &response_frame) <= 0) {
+        printF(RED, "Error receiving response from Bowman\n");
+        close(client_socket);
+        return;
+    }
+
+    if (strcmp(response_frame.header_plus_data, "SHUTDOWN_OK") == 0) {
+        printF(GREEN, "Bowman notified\n");
+    } else {
+        printF(RED, "Connection to Poole failed: %s\n", response_frame.header_plus_data);
+        close(client_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    close(client_socket);
+
 }

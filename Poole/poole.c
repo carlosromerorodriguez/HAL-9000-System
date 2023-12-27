@@ -24,6 +24,7 @@ void free_all_dynamic_memory(void);
 void connect_to_discovery(const PooleConfig *config);
 int setup_listen_socket(int port);
 void startMonolitServer(void);
+int disconnect_notification_to_discovery(char *username, char *discovery_ip, int discovery_port);
 
 /**
  * @brief Función principal del programa Poole
@@ -87,6 +88,7 @@ int main(int argc, char** argv) {
         }
 
         if (FD_ISSET(listen_socket, &read_fds)) {
+            
             struct sockaddr_in client_addr;
             socklen_t addr_len = sizeof(client_addr);
             int client_socket = accept(listen_socket, (struct sockaddr *)&client_addr, &addr_len);
@@ -328,11 +330,53 @@ int setup_listen_socket(int port) {
 */
 void kctrlc(int signum) {
 
+    disconnect_notification_to_discovery(poole_config->username, poole_config->discovery_ip, poole_config->discovery_port);
     poole_sigint_received = 1;
 
     if (signum == SIGINT) {
         server_sigint_received = 1;
         free_all_dynamic_memory();
     } 
+
     exit(EXIT_SUCCESS);
+}
+
+int disconnect_notification_to_discovery(char *username, char *discovery_ip, int discovery_port){
+    
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock < 0) {
+        printF(RED, "Socket creation failed\n");
+        return EXIT_FAILURE;    
+    }
+
+    struct sockaddr_in discovery_addr;
+    memset(&discovery_addr, 0, sizeof(discovery_addr));
+    discovery_addr.sin_family = AF_INET;
+    discovery_addr.sin_port = htons(discovery_port);
+    inet_pton(AF_INET, discovery_ip, &discovery_addr.sin_addr);
+
+    if (connect(sock, (struct sockaddr *)&discovery_addr, sizeof(discovery_addr)) < 0) {
+        printF(RED, "Connection to Discovery failed\n");
+        close(sock);
+        return EXIT_FAILURE;
+    }
+
+    char logout_data[HEADER_MAX_SIZE];
+    snprintf(logout_data, sizeof(logout_data), "%s&%s&%d", username, poole_config->discovery_ip, poole_config->discovery_port);
+    Frame logout_frame = frame_creator(0x06, "POOLE_SHUTDOWN", logout_data);
+
+    if (send_frame(sock, &logout_frame) < 0) {
+        printF(RED, "Error sending SHUTDOWN frame to Discovery server.\n");
+        return EXIT_FAILURE;
+    }
+
+    Frame discovery_disconnect_frame;
+    if (receive_frame(sock, &discovery_disconnect_frame) <= 0) {
+        printF(RED, "Error receiving response from Discovery server.\n");
+        return EXIT_FAILURE;
+    }
+
+    close(sock);
+    printF(GREEN, "Disconnected from Discovery server.\n");
+    return EXIT_SUCCESS;
 }
