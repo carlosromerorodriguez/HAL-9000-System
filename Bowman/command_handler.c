@@ -15,6 +15,7 @@ int discovery_socket;
 char *username;
 char *discovery_ip;
 int *psocket;
+int bowman_is_connected = 0;
 
 // Declaración de funciones
 void connect_to_server(int *psocket);
@@ -117,7 +118,7 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
 
     char *opcode = parse_command(command);
 
-    if (!*connected) {
+    if (!*connected || bowman_is_connected == 0) {
         
         if (!strcasecmp(opcode, "CONNECT")) {
 
@@ -160,6 +161,7 @@ unsigned char handle_bowman_command(char *command, unsigned char *connected, int
             printF(GREEN, "%s connected to HAL 9000 system, welcome music lover!\n", username);
             printF(GREEN, "Connected to Poole server [%s] at IP %s and port %d\n", global_server_name, global_server_ip, global_server_port);
             *connected = 1; 
+            bowman_is_connected = 1;
 
             //Crear la cola de mensajes
             msg_id = msgget(IPC_PRIVATE, 0600 | IPC_CREAT);
@@ -283,7 +285,7 @@ int connect_to_discovery(char *username, char *discovery_ip, int discovery_port)
         return EXIT_FAILURE;
     }
 
-    printF(GREEN, "Connecting to Discovery server at IP %s and port %d\n", discovery_ip, discovery_port);
+    printF(GREEN, "\nConnecting to Discovery server at IP %s and port %d\n", discovery_ip, discovery_port);
 
     struct sockaddr_in discovery_addr;
     memset(&discovery_addr, 0, sizeof(discovery_addr));
@@ -629,6 +631,8 @@ void *receive_frames(void *args) {
             pthread_exit(NULL);
         }
         else if (!strncasecmp(response_frame.header_plus_data , "POOLE_SHUTDOWN", response_frame.header_length)) {
+            
+            printF(RED, "\nPoole server has shutdown. Reconnecting to Discovery...\n");
 
             Frame logout_frame = frame_creator(0x06, "SHUTDOWN_OK", "");
 
@@ -640,9 +644,11 @@ void *receive_frames(void *args) {
             close(*trf.poole_socket);
             if(!connect_to_another_server(trf.username, trf.discovery_ip, trf.discovery_port, trf.poole_socket)){
                 printF(RED, "Error connecting to another server. No Pooles available\n");
+                bowman_is_connected = 0;
+                printF(WHITE, "$ ");
                 pthread_exit(NULL);
             }
-            
+            printF(WHITE, "$ ");
         }
         else if (!strncasecmp(response_frame.header_plus_data , "UNKNOWN", response_frame.header_length)) {
  
@@ -968,6 +974,7 @@ int logout(char *username) {
         return EXIT_FAILURE;
     } 
 
+
     return EXIT_SUCCESS;
 }
 
@@ -1057,7 +1064,7 @@ int connect_to_another_server(char *username, char *discovery_ip, int port, int 
 
     discovery_socket = connect_to_discovery(username, discovery_ip, port);
     if (discovery_socket == EXIT_FAILURE) {
-        printF(RED, "Failed to connect to Discovery server\n");
+        printF(RED, "No sockets availabe\n");
         return 0;
     }
     

@@ -59,6 +59,7 @@ int main(int argc, char **argv) {
         user_prompt[n-1] = '\0';
 
         end = handle_bowman_command(user_prompt, &connected, &discovery_socket, bowman_config->username, bowman_config->discovery_ip, bowman_config->discovery_port, &poole_socket);
+        sleep(0.1);
     } while (!end);
 
     
