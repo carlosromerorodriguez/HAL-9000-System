@@ -14,6 +14,15 @@ extern unsigned char connected;
 extern char global_server_ip[INET_ADDRSTRLEN]; // Tamaño suficiente para direcciones IPv4
 extern int poole_socket;
 
+/**
+ * @brief Función del hilo que recibe y maneja tramas del servidor Poole.
+ *
+ * Este hilo se ejecuta constantemente en segundo plano, recibiendo tramas del servidor Poole y respondiendo adecuadamente.
+ * Maneja diferentes tipos de tramas como respuestas a canciones, listas de reproducción, datos de archivo, y comandos de cierre de sesión o de apagado del servidor.
+ *
+ * @param args Estructura que contiene los parámetros necesarios para la función, incluyendo el socket de Poole y datos de usuario.
+ * @return void* Retorna NULL al finalizar la ejecución del hilo.
+ */
 void *receive_frames(void *args) {
     thread_receive_frames trf = *(thread_receive_frames *)args;
 

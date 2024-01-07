@@ -1,6 +1,7 @@
 #ifndef GLOBAL_H
 #define GLOBAL_H
 
+// Importaciones de librerias
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdint.h>
@@ -44,17 +45,20 @@
 #define HEADER_SIZE 3
 #define HEADER_MAX_SIZE 253
 
+// Estructura para almacenar un frame
 typedef struct {
     char type; // 1 byte
     unsigned short header_length; // 2 bytes
     char header_plus_data[HEADER_MAX_SIZE]; // 253 bytes
 } Frame;
 
+// Estructura para almacenar un frame binario en la cola de mensajes
 typedef struct {
     long msg_type;
     char msg_text[HEADER_MAX_SIZE];
 } Message_buffer;
 
+// Estructura para almacenar la informacion de un servidor Poole
 typedef struct {
     int *poole_socket;
     char *username;
@@ -62,6 +66,7 @@ typedef struct {
     int discovery_port;
 } thread_receive_frames;
 
+// Estructura para almacenar la información de una canción
 typedef struct {
     char *fileName;
     long fileSize;
@@ -69,6 +74,7 @@ typedef struct {
     int id;
 } Song;
 
+// Estructura para almacenar la información de una canción descargada o descargando
 typedef struct {
     Song song;
     long downloaded_bytes;
@@ -243,6 +249,13 @@ void msg_queue_delete(int msg_id);
 */
 char* intToStr(int num);
 
+/**
+ * @brief Gets the md5sum of a file in a given path
+ * 
+ * @param filePath Path of the file
+ * 
+ * @return md5sum
+*/
 char* getFileMD5(char *filePath);
 
 #endif // !GLOBAL_H

@@ -188,6 +188,14 @@ int receive_frame(int socket, Frame *frame) {
     return read_bytes;
 }
 
+/**
+ * @brief Write a message to a message queue
+ * 
+ * @param msg_id Message queue id
+ * @param message Message to write
+ * 
+ * @return void 
+*/
 void msg_queue_writer(int msg_id, Message_buffer *message) {
     if (message == NULL) {
         printF(RED, "Invalid message buffer\n");
@@ -200,6 +208,14 @@ void msg_queue_writer(int msg_id, Message_buffer *message) {
     }
 }
 
+/**
+ * @brief Read a message from a message queue
+ * 
+ * @param msg_id Message queue id
+ * @param message Message to read
+ * 
+ * @return void 
+*/
 void msg_queue_reader(int msg_id, Message_buffer *message) {
     if (message == NULL) {
         printF(RED, "Invalid message buffer\n");
@@ -211,7 +227,13 @@ void msg_queue_reader(int msg_id, Message_buffer *message) {
     }
 }
 
-
+/**
+ * @brief Deletes a message queue
+ * 
+ * @param msg_id Message queue id
+ * 
+ * @return void
+*/
 void msg_queue_delete(int msg_id) {
     if (msgctl(msg_id, IPC_RMID, NULL) == -1) {
         printF(RED, "msgctl error\n");
@@ -220,6 +242,13 @@ void msg_queue_delete(int msg_id) {
     }
 }
 
+/**
+ * @brief Converts int to string
+ * 
+ * @param num num to convert
+ * 
+ * @return str
+*/
 char* intToStr(int num) {
     int length = 0;
     int temp = num;
@@ -249,6 +278,13 @@ char* intToStr(int num) {
     return str;
 }
 
+/**
+ * @brief Gets the md5sum of a file in a given path
+ * 
+ * @param filePath Path of the file
+ * 
+ * @return md5sum
+*/
 char* getFileMD5(char *filePath) {
     int pipefd[2];
     pid_t pid;

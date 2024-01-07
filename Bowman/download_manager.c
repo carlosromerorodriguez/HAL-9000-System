@@ -11,7 +11,13 @@ extern char *bowman_folder_path;
 extern int bowman_sigint_received;
 extern int msg_id;
 
-//DOWNLOAD SONG FUNCTION 
+/**
+ * @brief Inicia la descarga de una canción o una lista de reproducción.
+ *
+ * Envía una trama al servidor Poole para solicitar la descarga de una canción o una lista de reproducción.
+ * 
+ * @param name Nombre de la canción o lista de reproducción a descargar.
+ */
 void download(char *name) {
 
     if(check_if_playlist(name)){
@@ -33,6 +39,11 @@ void download(char *name) {
     printF(GREEN, "Download started!\n");
 }
 
+/**
+ * @brief Limpia las canciones completamente descargadas de la lista de descargas.
+ *
+ * Revisa la lista de canciones descargándose y elimina aquellas que han sido completamente descargadas.
+ */
 void clearDownloadedSongs(){
     printF(GREEN, "Limpiando canciones descargadas\n");
     for (int i = 0; i < num_songs_downloading; i++) {
@@ -44,6 +55,14 @@ void clearDownloadedSongs(){
     }
 }
 
+/**
+ * @brief Función ejecutada en un hilo para manejar la descarga de una canción.
+ *
+ * Procesa la información de la canción, crea un archivo y escribe los datos recibidos en él.
+ * 
+ * @param args Argumentos pasados al hilo, incluyendo la información de la canción.
+ * @return void* Puntero a NULL al finalizar la ejecución del hilo.
+ */
 void* startSongDownload(void* args) {
     char* str = (char*)args; 
 
@@ -173,6 +192,13 @@ void* startSongDownload(void* args) {
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Maneja la recepción de un nuevo archivo desde el servidor Poole.
+ *
+ * Crea un hilo para manejar la descarga del archivo y procesa los datos recibidos.
+ * 
+ * @param data Datos del archivo recibido.
+ */
 void handleNewFile(char* data) {
     int data_length = strlen(data) + 1;
     char* data_copy = malloc(data_length);
@@ -197,6 +223,13 @@ void handleNewFile(char* data) {
     }
 }
 
+/**
+ * @brief Maneja los datos de archivo recibidos del servidor Poole.
+ *
+ * Almacena los datos del archivo en una cola de mensajes para su posterior procesamiento.
+ * 
+ * @param data Datos del archivo recibido.
+ */
 void handleFileData(char* data) {
     // ID (3 bytes [0-999]) + '&' + '\0'
     char id_str[4];
@@ -217,6 +250,12 @@ void handleFileData(char* data) {
     //printF(RED, "File data [AFTER] -> %s\n", msg.msg_text);
     msg_queue_writer(msg_id, &msg);
 }
+
+/**
+ * @brief Imprime todas las canciones que están siendo descargadas actualmente.
+ *
+ * Muestra el estado de descarga de cada canción en la lista de descargas.
+ */
 
 void printAllSongsDownloading() {
     if (songsDownloading == NULL || num_songs_downloading == 0) {
