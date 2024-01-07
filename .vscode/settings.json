@@ -2,6 +2,10 @@
     "files.associations": {
         "command_handler.h": "c",
         "global.h": "c",
-        "config.h": "c"
+        "config.h": "c",
+        "display_response_handler.h": "c",
+        "receive_poole_frames.h": "c",
+        "connection_handler.h": "c",
+        "session_handler.h": "c"
     }
 }

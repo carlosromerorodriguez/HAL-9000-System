@@ -9,12 +9,8 @@
  * @return 1 si se pudo leer el archivo correctamente, 0 en caso contrario
 */
 unsigned char readDiscoveryConfig(const char* filename, DiscoveryConfig* config) {
-    char *fullPath;
 
-    asprintf(&fullPath, "../%s", filename);
-
-    int fd = open(fullPath, O_RDONLY);
-    free(fullPath);
+    int fd = open(filename, O_RDONLY);
 
     if (fd < 0) {
         printF(RED, "Error opening config file");

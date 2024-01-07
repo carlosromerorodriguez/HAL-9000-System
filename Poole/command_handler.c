@@ -141,6 +141,7 @@ void *client_handler(void* args) {
             pthread_mutex_lock(&send_frame_mutex);
             if (send_frame(t_args->client_socket, &response_frame) < 0) {
                 printF(RED, "Error sending response frame to Bowman.\n");
+                pthread_mutex_unlock(&send_frame_mutex);
                 return NULL;
             }
             pthread_mutex_unlock(&send_frame_mutex);
@@ -234,9 +235,6 @@ void* list_songs_handler(void* args) {
     int offset = 0;
     char data_segment[HEADER_MAX_SIZE]; // 253 bytes
 
-    //MANDAR EL TAMAÑO DE LA LISTA DE CANCIONES AL CLIENTE
-    printF(YELLOW, "List length: %d\n", list_length);
-
     char list_length_str[HEADER_MAX_SIZE - strlen("LIST_SONGS_SIZE")];
     memset(list_length_str, 0, HEADER_MAX_SIZE - strlen("LIST_SONGS_SIZE"));
     snprintf(list_length_str, sizeof(list_length_str), "%d", list_length);
@@ -247,6 +245,7 @@ void* list_songs_handler(void* args) {
     if (send_frame(t_args->client_socket, &list_length_frame) < 0) {
         printF(RED, "Error sending list length frame to Bowman.\n");
         free(songs_list);
+        pthread_mutex_unlock(&send_frame_mutex);
         return NULL;
     }
     pthread_mutex_unlock(&send_frame_mutex);
@@ -264,6 +263,7 @@ void* list_songs_handler(void* args) {
         if (send_frame(t_args->client_socket, &response_frame) < 0) {
             printF(RED, "Error sending response frame to Bowman.\n");
             free(songs_list);
+            pthread_mutex_unlock(&send_frame_mutex);
             return NULL;
         }
         pthread_mutex_unlock(&send_frame_mutex);
@@ -356,15 +356,9 @@ void* list_playlists_handler(void* args) {
         printF(RED, "Error getting songs list.\n");
         return NULL;
     }
-
-    printF(YELLOW, "Songs list: %s\n", playlists_list);
-
     int list_length = strlen(playlists_list);
     int offset = 0;
     char data_segment[HEADER_MAX_SIZE]; // 253 bytes
-
-    //MANDAR EL TAMAÑO DE LA LISTA DE CANCIONES AL CLIENTE
-    printF(YELLOW, "List length: %d\n", list_length);
 
     char list_length_str[HEADER_MAX_SIZE - strlen("LIST_PLAYLISTS_SIZE")];
     memset(list_length_str, 0, HEADER_MAX_SIZE - strlen("LIST_PLAYLISTS_SIZE"));
@@ -375,6 +369,7 @@ void* list_playlists_handler(void* args) {
     if (send_frame(t_args->client_socket, &list_length_frame) < 0) {
         printF(RED, "Error sending list length frame to Bowman.\n");
         free(playlists_list);
+        pthread_mutex_unlock(&send_frame_mutex);
         return NULL;
     }
     pthread_mutex_unlock(&send_frame_mutex);
@@ -387,11 +382,12 @@ void* list_playlists_handler(void* args) {
         data_segment[data_length] = '\0'; // Asegura que el segmento de datos esté correctamente terminado
 
         Frame response_frame = frame_creator(0x02, "PLAYLISTS_RESPONSE", data_segment);
-        printF(YELLOW, "Sending frame: %s\n", response_frame.header_plus_data);
+        //printF(YELLOW, "Sending frame: %s\n", response_frame.header_plus_data);
         pthread_mutex_lock(&send_frame_mutex);
         if (send_frame(t_args->client_socket, &response_frame) < 0) {
             printF(RED, "Error sending response frame to Bowman.\n");
             free(playlists_list);
+            pthread_mutex_unlock(&send_frame_mutex);
             return NULL;
         }
         pthread_mutex_unlock(&send_frame_mutex);
@@ -486,49 +482,6 @@ char* searchFolder(const char *basePath, const char *folderName) {
     return path;
 }
 
-char* getFileMD5(char *filePath) {
-    int pipefd[2];
-    pid_t pid;
-    char *md5sum = malloc(33);
-
-    if (md5sum == NULL) {
-        fprintf(stderr, "Memory allocation failed\n");
-        return NULL;
-    }
-
-    if (pipe(pipefd) == -1) {
-        perror("pipe");
-        free(md5sum);
-        return NULL;
-    }
-
-    pid = fork();
-    if (pid == -1) {
-        perror("fork");
-        free(md5sum);
-        return NULL;
-    }
-
-    if (pid == 0) { 
-        close(pipefd[0]);
-        dup2(pipefd[1], STDOUT_FILENO);
-        close(pipefd[1]); 
-
-        execlp("md5sum", "md5sum", filePath, NULL);
-        _exit(EXIT_FAILURE);
-    } else {
-        close(pipefd[1]);
-
-        read(pipefd[0], md5sum, 32);
-        md5sum[32] = '\0';
-
-        close(pipefd[0]); 
-        wait(NULL);
-    }
-
-    return md5sum;
-}
-
 off_t getFileSize(const char *filePath) {
     struct stat fileStat;
 
@@ -552,9 +505,7 @@ void* send_song(void * args){
     strcat(newPath, t_args->server_directory);
 
     char *path = searchSong(newPath, t_args->song_name);
-    if (path) {
-        //printF(GREEN,"Found: %s\n", path);
-    } else {
+    if (!path) {
         printF(RED,"Song not found.\n");
         free(path);
         free(newPath);
@@ -571,10 +522,10 @@ void* send_song(void * args){
         pthread_exit(NULL);
     }
 
-    //Mandar el nombre de la canción a monolit
+    // Mandar el nombre de la canción a monolit
     pthread_mutex_lock(&write_pipe_mutex);
     write(global_write_pipe, t_args->song_name, strlen(t_args->song_name));
-    
+    sleep(0.05);
     pthread_mutex_unlock(&write_pipe_mutex);
 
     char *file_name = NULL;
@@ -600,6 +551,8 @@ void* send_song(void * args){
         free(path);
         free(md5sum);
         free(newPath);
+        free(data);
+        pthread_mutex_unlock(&send_frame_mutex);
         pthread_exit(NULL);
     } 
     pthread_mutex_unlock(&send_frame_mutex);
@@ -615,10 +568,8 @@ void* send_song(void * args){
         free(t_args->playlist_name);
         free(t_args);
     }
+
     pthread_exit(NULL);
-
-    //printF(GREEN, "Thread finished\n");
-
 }
 
 void* send_list(void * args) {
@@ -766,9 +717,8 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
             printF(RED, "Error sending FILE_DATA frame to %s.\n", t_args.username);
             free(data);
             free(buffer);
-            close(fd);
-            free(id_char);
-            return;
+            pthread_mutex_unlock(&send_frame_mutex);
+            break;
         }
         pthread_mutex_unlock(&send_frame_mutex);
 
@@ -783,11 +733,9 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
         }
     }
 
-    //printF(GREEN, "File completed!\n");
     close(fd);
     free(id_char);
 }
-
 
 void server_shutdown(int client_socket) {
     

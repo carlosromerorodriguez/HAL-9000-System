@@ -3,14 +3,6 @@
 
 #include "../global.h"
 
-// Structure to store the Bowman's configuration
-typedef struct {
-    char *username;
-    char *folder_path;
-    char *discovery_ip;
-    int discovery_port;
-} BowmanConfig;
-
 /**
  * @brief Fill the Bowman configuration with the data from the file
  * 

@@ -1,4 +1,6 @@
 #include "../global.h"
+#include "config.h"
+#include "command_handler.h"
 #include "monolit.h"
 
 #define DATA_MAX_SIZE 253
@@ -6,7 +8,7 @@
 /*
     Variables globales necesárias (pata liberar en caso de Ctrl+C)
 */
-static PooleConfig *poole_config; // configuración de Poole
+PooleConfig *poole_config; // configuración de Poole
 int listen_socket;
 char* username;
 thread_args *args;
@@ -15,6 +17,7 @@ pthread_t *thread_ids;
 int num_threads = 0;
 int global_write_pipe;
 volatile sig_atomic_t poole_sigint_received = 0;
+extern pthread_mutex_t send_frame_mutex;
 
 /*
     Delaración de funciones
@@ -24,7 +27,7 @@ void free_all_dynamic_memory(void);
 void connect_to_discovery(const PooleConfig *config);
 int setup_listen_socket(int port);
 void startMonolitServer(void);
-int disconnect_notification_to_discovery(char *username, char *discovery_ip, int discovery_port);
+int disconnect_notification_to_discovery(const PooleConfig *config);
 
 /**
  * @brief Función principal del programa Poole
@@ -39,8 +42,6 @@ int main(int argc, char** argv) {
     check_input_arguments(argc, 2);
 
     signal(SIGINT, kctrlc); //Activar signal Ctrl+C
-
-    startMonolitServer();
 
     poole_config = (PooleConfig *) malloc (sizeof(PooleConfig));
 
@@ -58,6 +59,8 @@ int main(int argc, char** argv) {
 
     printF(WHITE, "Waiting for connections...\n");
 
+    startMonolitServer();
+
     listen_socket = setup_listen_socket(poole_config->poole_port);
     if (listen_socket == EXIT_FAILURE) {
         free_all_dynamic_memory();
@@ -73,7 +76,6 @@ int main(int argc, char** argv) {
     }
 
     fd_set read_fds;
-
     while (!server_sigint_received) {
         FD_ZERO(&read_fds);
         FD_SET(listen_socket, &read_fds);
@@ -158,7 +160,6 @@ void startMonolitServer(void) {
         printF(GREEN, "Starting Monolit Server...\n");
         close(fd[1]); // Cerrar el extremo de escritura del pipe
         throwMonolitServer(fd[0]); // Llamar a la función del Monòlit
-        exit(0);
     } else {
         // Proceso padre (Poole)
         close(fd[0]); // Cerrar el extremo de lectura del pipe
@@ -185,17 +186,25 @@ void free_all_dynamic_memory(void) {
     //pthread_join(args->list_playlists_thread, NULL);
 
     if (poole_config != NULL) {
-        free(poole_config->username);
-        poole_config->username = NULL;
+        if (poole_config->username != NULL) {
+            free(poole_config->username);
+            poole_config->username = NULL;
+        }
 
-        free(poole_config->folder_path);
-        poole_config->folder_path = NULL;
+        if (poole_config->folder_path != NULL) {
+            free(poole_config->folder_path);
+            poole_config->folder_path = NULL;
+        }
 
-        free(poole_config->discovery_ip);
-        poole_config->discovery_ip = NULL;
+        if (poole_config->poole_ip != NULL) {
+            free(poole_config->poole_ip);
+            poole_config->poole_ip = NULL;
+        }
 
-        free(poole_config->poole_ip);
-        poole_config->poole_ip = NULL;
+        if (poole_config->discovery_ip != NULL) {
+            free(poole_config->discovery_ip);
+            poole_config->discovery_ip = NULL;
+        }
 
         if (poole_config->discovery_port >= 0) {
             poole_config->discovery_port = -1;
@@ -329,11 +338,9 @@ int setup_listen_socket(int port) {
  * @return void
 */
 void kctrlc(int signum) {
-
-    disconnect_notification_to_discovery(poole_config->username, poole_config->discovery_ip, poole_config->discovery_port);
-    poole_sigint_received = 1;
-
     if (signum == SIGINT) {
+        disconnect_notification_to_discovery(poole_config);
+        poole_sigint_received = 1;
         server_sigint_received = 1;
         free_all_dynamic_memory();
     } 
@@ -341,8 +348,7 @@ void kctrlc(int signum) {
     exit(EXIT_SUCCESS);
 }
 
-int disconnect_notification_to_discovery(char *username, char *discovery_ip, int discovery_port){
-    
+int disconnect_notification_to_discovery(const PooleConfig *config){
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
         printF(RED, "Socket creation failed\n");
@@ -352,23 +358,27 @@ int disconnect_notification_to_discovery(char *username, char *discovery_ip, int
     struct sockaddr_in discovery_addr;
     memset(&discovery_addr, 0, sizeof(discovery_addr));
     discovery_addr.sin_family = AF_INET;
-    discovery_addr.sin_port = htons(discovery_port);
-    inet_pton(AF_INET, discovery_ip, &discovery_addr.sin_addr);
+    discovery_addr.sin_port = htons(config->discovery_port);
+    inet_pton(AF_INET, config->discovery_ip, &discovery_addr.sin_addr);
 
+    pthread_mutex_lock(&send_frame_mutex);
     if (connect(sock, (struct sockaddr *)&discovery_addr, sizeof(discovery_addr)) < 0) {
         printF(RED, "Connection to Discovery failed\n");
         close(sock);
         return EXIT_FAILURE;
     }
-
+    pthread_mutex_unlock(&send_frame_mutex);
+    
     char logout_data[HEADER_MAX_SIZE];
-    snprintf(logout_data, sizeof(logout_data), "%s&%s&%d", username, poole_config->discovery_ip, poole_config->discovery_port);
+    snprintf(logout_data, HEADER_MAX_SIZE, "%s&%s&%d", config->username, config->discovery_ip, config->discovery_port);
     Frame logout_frame = frame_creator(0x06, "POOLE_SHUTDOWN", logout_data);
 
+    pthread_mutex_lock(&send_frame_mutex);
     if (send_frame(sock, &logout_frame) < 0) {
         printF(RED, "Error sending SHUTDOWN frame to Discovery server.\n");
         return EXIT_FAILURE;
     }
+    pthread_mutex_unlock(&send_frame_mutex);
 
     Frame discovery_disconnect_frame;
     if (receive_frame(sock, &discovery_disconnect_frame) <= 0) {
@@ -377,6 +387,6 @@ int disconnect_notification_to_discovery(char *username, char *discovery_ip, int
     }
 
     close(sock);
-    printF(GREEN, "Disconnected from Discovery server.\n");
+    printF(GREEN, "\n\nDisconnected from Discovery server.\n");
     return EXIT_SUCCESS;
 }

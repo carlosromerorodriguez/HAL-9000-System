@@ -1,6 +1,6 @@
 #include "monolit.h"
 
-extern volatile sig_atomic_t server_sigint_received;
+pthread_mutex_t write_file = PTHREAD_MUTEX_INITIALIZER; 
 
 void updateStatistics(const char *songName) {
     int fd = open("stats.txt", O_RDWR | O_CREAT, 0644);
@@ -106,8 +106,11 @@ void throwMonolitServer(int read_pipe) {
             // Procesar la información recibida si se detecta el final de la cadena
             if (buffer[count - 1] == '\0' || count < (ssize_t)sizeof(buffer) - 1) {
                 printF(GREEN, "Received in monolit.c: %s\n", dynamicBuffer);
+                
                 // Actualizarías stats.txt
+                pthread_mutex_lock(&write_file);
                 updateStatistics(dynamicBuffer);
+                pthread_mutex_unlock(&write_file);
 
                 // Resetear el buffer dinámico para la próxima lectura
                 free(dynamicBuffer);

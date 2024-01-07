@@ -3,16 +3,6 @@
 
 #include "../global.h"
 
-// Estructura para almacenar la configuracion de Poole
-typedef struct {
-    char *username;
-    char *folder_path;
-    char *discovery_ip;
-    int discovery_port;
-    char *poole_ip;
-    int poole_port;
-} PooleConfig;
-
 /**
  * @brief Fill the Poole configuration with the data from the file
  * 

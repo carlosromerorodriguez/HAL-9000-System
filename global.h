@@ -16,6 +16,7 @@
 #include <sys/socket.h>
 #include <fcntl.h>
 #include <signal.h>
+#include <poll.h>
 #include <time.h>
 #include <pthread.h>
 #include <fcntl.h>
@@ -26,18 +27,6 @@
 #include <sys/msg.h>
 #include <sys/stat.h>  
 #include <sys/wait.h> 
-
-
-//BOWMAN INCLUDES
-#include "Bowman/config.h"
-#include "Bowman/command_handler.h"
-
-//POOLE INCLUDES
-#include "Poole/config.h"
-#include "Poole/command_handler.h"
-
-//DISCOVERY INCLUDES
-#include "Discovery/config.h"
 
 
 /**
@@ -66,7 +55,75 @@ typedef struct {
     char msg_text[HEADER_MAX_SIZE];
 } Message_buffer;
 
+typedef struct {
+    int *poole_socket;
+    char *username;
+    char *discovery_ip;
+    int discovery_port;
+} thread_receive_frames;
 
+typedef struct {
+    char *fileName;
+    long fileSize;
+    char *md5sum;
+    int id;
+} Song;
+
+typedef struct {
+    Song song;
+    long downloaded_bytes;
+    long song_size;
+    pthread_t thread_id;
+} Song_Downloading;
+
+// Structure to store the Bowman's configuration
+typedef struct {
+    char *username;
+    char *folder_path;
+    char *discovery_ip;
+    int discovery_port;
+} BowmanConfig;
+
+// Estructura para almacenar la configuracion de Poole
+typedef struct {
+    char *username;
+    char *folder_path;
+    char *discovery_ip;
+    int discovery_port;
+    char *poole_ip;
+    int poole_port;
+} PooleConfig;
+
+// Estructura para pasar los argumentos al thread
+typedef struct {
+    int client_socket;
+    int is_song;
+    char *playlist_name;
+    char* username;
+    char* server_directory;
+    char* song_name;
+    char* list_name;
+    pthread_t list_songs_thread;
+    pthread_t list_playlists_thread;
+    pthread_t download_song_thread;
+    pthread_t download_playlist_thread;
+} thread_args;
+
+// Estructura para almacenar la configuración del servidor
+typedef struct PooleServer {
+    char *server_name;       // Nombre del servidor Poole
+    char *ip_address;        // Dirección IP del servidor Poole
+    int port;                // Puerto del servidor Poole
+    int connected_users;     // Número de usuarios actualmente conectados a este servidor Poole
+    char **usernames;        // Lista de nombres de usuario conectados a este servidor Poole
+    struct PooleServer* next;// Puntero al siguiente servidor Poole en la lista
+} PooleServer;
+
+// Estructura para almacenar la configuración
+typedef struct {
+    struct sockaddr_in poole_addr;
+    struct sockaddr_in bowman_addr;
+} DiscoveryConfig;
 
 /**
  * @brief Print a message with the color specified
@@ -185,4 +242,7 @@ void msg_queue_delete(int msg_id);
  * @return str
 */
 char* intToStr(int num);
+
+char* getFileMD5(char *filePath);
+
 #endif // !GLOBAL_H

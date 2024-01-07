@@ -4,12 +4,6 @@
 // Librerias
 #include "../global.h"
 
-// Estructura para almacenar la configuración
-typedef struct {
-    struct sockaddr_in poole_addr;
-    struct sockaddr_in bowman_addr;
-} DiscoveryConfig;
-
 /**
  * @brief Lee todo el archivo Discovery y lo almacen en una estructura DiscoveryConfig
  * 

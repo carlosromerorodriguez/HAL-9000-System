@@ -23,12 +23,9 @@ static void remove_ampersand(char *str) {
 */
 unsigned char fill_bowman_config(BowmanConfig *bowman_config, char filename[1]) {
     int fd;
-    char *fullPath, *aux;
+    char *aux;
 
-    asprintf(&fullPath, "../%s", filename);
-
-    fd = open(fullPath, O_RDONLY);
-    free(fullPath);
+    fd = open(filename, O_RDONLY);
 
     if (fd == -1) {
         printF(RED, "ERROR: Failed to open the Bowman file\n");

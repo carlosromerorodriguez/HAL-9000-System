@@ -157,7 +157,7 @@ int send_frame(int socket, Frame *frame) {
     index += sizeof(frame->header_length);
     memcpy(buffer + index, frame->header_plus_data, HEADER_MAX_SIZE);
 
-    if (write(socket, buffer, FRAME_SIZE) < FRAME_SIZE) {
+    if (send(socket, buffer, FRAME_SIZE, MSG_NOSIGNAL) < FRAME_SIZE) {
         return -1;
     }
 
@@ -247,4 +247,47 @@ char* intToStr(int num) {
     str[length] = '\0';
 
     return str;
+}
+
+char* getFileMD5(char *filePath) {
+    int pipefd[2];
+    pid_t pid;
+    char *md5sum = malloc(33);
+
+    if (md5sum == NULL) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return NULL;
+    }
+
+    if (pipe(pipefd) == -1) {
+        perror("pipe");
+        free(md5sum);
+        return NULL;
+    }
+
+    pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        free(md5sum);
+        return NULL;
+    }
+
+    if (pid == 0) { 
+        close(pipefd[0]);
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[1]); 
+
+        execlp("md5sum", "md5sum", filePath, NULL);
+        _exit(EXIT_FAILURE);
+    } else {
+        close(pipefd[1]);
+
+        read(pipefd[0], md5sum, 32);
+        md5sum[32] = '\0';
+
+        close(pipefd[0]); 
+        wait(NULL);
+    }
+
+    return md5sum;
 }
