@@ -9,7 +9,7 @@ Este documento proporciona los pasos necesarios para compilar y ejecutar los com
     ```bash
    make
 
-**Nota:** Los archivos `.o` se eliminarán automáticamente después de la compilación.
+   **Nota:** Los archivos `.o` se eliminarán automáticamente después de la compilación.
 
 2. **Conversión de formato de archivos de configuración:**
 Asegúrate de que el formato de los archivos de configuración sea Unix y no Windows. Para ello, ejecuta el siguiente comando en el mismo nivel que el `makefile`:
