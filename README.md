@@ -8,6 +8,7 @@ Este documento proporciona los pasos necesarios para compilar y ejecutar los com
    En el directorio raíz del proyecto, donde se encuentra el `makefile`, ejecutar el comando:
     ```bash
    make
+   ```
 
    **Nota:** Los archivos `.o` se eliminarán automáticamente después de la compilación.
 
