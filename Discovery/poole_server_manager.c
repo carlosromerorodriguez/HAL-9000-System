@@ -50,6 +50,14 @@ PooleServer* find_least_loaded_poole_server() {
     return least_loaded;
 }
 
+
+/**
+ * @brief Función para eliminar un servidor Poole de la lista de servidores disponibles
+ * 
+ * @param data Nombre del servidor Poole
+ * 
+ * @return void
+*/
 void delete_poole_from_list(char* data) {
 
     char *server_name = strtok(data, "&");

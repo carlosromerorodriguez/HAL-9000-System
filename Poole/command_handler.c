@@ -155,7 +155,17 @@ void *client_handler(void* args) {
     return NULL;
 }
 
-//LIST SONGS FUNCTIONS
+/**
+ * @brief Añade una canción a la lista de canciones existente.
+ * 
+ * Realoca el espacio de memoria para incluir la nueva canción y un delimitador '&'.
+ * En caso de error en la realocación, muestra un mensaje y termina la función.
+ * 
+ * @param songs_list Puntero doble a la lista de canciones.
+ * @param song_name Nombre de la canción a añadir.
+ * 
+ * @return void
+ */
 void append_song(char **songs_list, char *song_name) {
     *songs_list = realloc(*songs_list, strlen(*songs_list) + strlen(song_name) + 2);
     if (*songs_list == NULL) {
@@ -166,6 +176,19 @@ void append_song(char **songs_list, char *song_name) {
     strcat(*songs_list, "&");
 }
 
+
+/**
+ * @brief Recorre recursivamente un directorio para buscar y añadir archivos MP3 a la lista de canciones.
+ * 
+ * Esta función abre el directorio especificado y busca archivos MP3. Si encuentra un subdirectorio,
+ * realiza una llamada recursiva para buscar archivos MP3 dentro de él. Los archivos MP3 encontrados
+ * se añaden a la lista de canciones mediante la función 'append_song'.
+ * 
+ * @param directory El directorio inicial para comenzar la búsqueda.
+ * @param songs_list Puntero doble a la lista de canciones donde se añadirán los nombres de los archivos MP3.
+ * 
+ * @return void
+ */
 void get_mp3_files_recursive(char *directory, char **songs_list) {
     DIR *dir;
     struct dirent *ent;
@@ -189,6 +212,16 @@ void get_mp3_files_recursive(char *directory, char **songs_list) {
     }
 }
 
+/**
+ * @brief Obtiene la lista de canciones del servidor.
+ * 
+ * Esta función crea una nueva ruta para el directorio de canciones y llama a la función
+ * 'get_mp3_files_recursive' para obtener la lista de canciones.
+ * 
+ * @param directory El directorio inicial para comenzar la búsqueda.
+ * 
+ * @return char* La lista de canciones.
+ */
 char* get_mp3_files(char *directory) {
     char *songs_list = malloc(1);
     if (songs_list == NULL) {
@@ -202,6 +235,16 @@ char* get_mp3_files(char *directory) {
     return songs_list;
 }
 
+/**
+ * @brief Obtiene la lista de canciones del servidor.
+ * 
+ * Esta función crea una nueva ruta para el directorio de canciones y llama a la función
+ * 'get_mp3_files_recursive' para obtener la lista de canciones.
+ * 
+ * @param t_args Estructura con los argumentos necesarios para la conexion
+ * 
+ * @return char* La lista de canciones.
+ */
 char* get_songs_list(thread_args *t_args) {
     char *new_directory = malloc(strlen(t_args->server_directory) + 3);
     if (new_directory == NULL) {
@@ -217,6 +260,15 @@ char* get_songs_list(thread_args *t_args) {
     return songs_list;
 }
 
+/**
+ * @brief Thread que maneja la petición de listado de canciones.
+ * 
+ * Esta función obtiene la lista de canciones del servidor y la envía a Bowman.
+ * 
+ * @param args Estructura con los argumentos necesarios para la conexion
+ * 
+ * @return void
+ */
 void* list_songs_handler(void* args) {
     thread_args *t_args = (thread_args*)args;
 
@@ -274,7 +326,17 @@ void* list_songs_handler(void* args) {
     pthread_exit(NULL);
 }
 
-//LIST PLAYLISTS FUNCTIONS
+/**
+ * @brief Añade un nombre de playlist a una lista de playlists, separando los nombres con un carácter específico.
+ * 
+ * Realoca memoria para la lista de playlists para acomodar el nuevo nombre, incluyendo espacio para el separador
+ * y el carácter nulo final. Añade el separador y luego el nombre de la nueva playlist a la lista.
+ * 
+ * @param playlists_list Puntero doble a la lista de playlists existente.
+ * @param playlist_name Nombre de la playlist a añadir.
+ * @param separator Carácter utilizado para separar los nombres de las playlists en la lista.
+ * 
+ */
 void append_playlist(char **playlists_list, char *playlist_name, char separator) {
     size_t new_size = strlen(*playlists_list) + strlen(playlist_name) + 2; // 1 para el separador, 1 para el '\0'
     char *temp = realloc(*playlists_list, new_size);
@@ -287,6 +349,19 @@ void append_playlist(char **playlists_list, char *playlist_name, char separator)
     strcat(*playlists_list, playlist_name);
 }
 
+/**
+ * @brief Recorre recursivamente un directorio para añadir nombres de playlists y archivos MP3 a una lista.
+ * 
+ * Abre un directorio especificado y busca tanto subdirectorios (playlists) como archivos MP3. 
+ * Añade los nombres de los subdirectorios y archivos MP3 a la lista de playlists, utilizando separadores 
+ * específicos ('#' para playlists y '&' para canciones). Realiza llamadas recursivas para buscar en 
+ * subdirectorios.
+ * 
+ * @param directory El directorio inicial para comenzar la búsqueda.
+ * @param playlists_list Puntero doble a la lista donde se añadirán los nombres de las playlists y canciones.
+ * 
+ * @return void
+ */
 void get_playlists_and_songs_files_recursive(char *directory, char **playlists_list) {
     DIR *dir;
     struct dirent *ent;
@@ -310,6 +385,17 @@ void get_playlists_and_songs_files_recursive(char *directory, char **playlists_l
     }
 }
 
+/**
+ * @brief Crea y devuelve una lista de nombres de playlists y canciones encontradas en un directorio.
+ * 
+ * Inicializa una lista de playlists y realiza una búsqueda recursiva en el directorio especificado
+ * para añadir los nombres de playlists y archivos MP3 a esta lista. Elimina el último separador 
+ * de la lista (si existe) antes de devolverla.
+ * 
+ * @param directory El directorio desde el cual comenzar la búsqueda de playlists y canciones.
+ * @return Puntero a la lista de playlists y canciones, o NULL si falla la asignación de memoria.
+ * 
+ */
 char* get_playlists_and_songs(char *directory) {
     char *playlist_list = malloc(1);
     if (playlist_list == NULL) {
@@ -328,6 +414,19 @@ char* get_playlists_and_songs(char *directory) {
     return playlist_list;
 }
 
+/**
+ * @brief Obtiene una lista de playlists y canciones de un directorio relacionado con el servidor.
+ * 
+ * Esta función construye una nueva ruta de directorio a partir del directorio del servidor proporcionado
+ * en los argumentos del hilo, y luego llama a 'get_playlists_and_songs' para obtener la lista de playlists 
+ * y canciones de ese directorio. La nueva ruta de directorio se crea añadiendo ".." al inicio del directorio 
+ * del servidor para referenciar el directorio padre.
+ * 
+ * @param t_args Argumentos del hilo que contienen el directorio del servidor.
+ * @return Puntero a la lista de playlists y canciones, o NULL si falla la asignación de memoria.
+ * 
+ * @note La memoria para el directorio nuevo se libera antes de retornar la lista de playlists.
+ */
 char *get_playlists_list(thread_args *t_args) {
     char *new_directory = malloc(strlen(t_args->server_directory) + 3);
     if (new_directory == NULL) {
@@ -342,6 +441,22 @@ char *get_playlists_list(thread_args *t_args) {
     free(new_directory);
     return playlists_list;
 }
+
+/**
+ * @brief Maneja la solicitud de listado de playlists y envía la lista a través de un socket.
+ * 
+ * Esta función se encarga de procesar los argumentos del hilo para obtener la lista de playlists 
+ * y canciones. Luego, envía esta lista en segmentos a través de un socket al cliente Bowman. 
+ * La lista se envía en múltiples marcos ('frames'), comenzando con el tamaño total de la lista y 
+ * seguido por los segmentos de la lista.
+ * 
+ * @param args Argumentos del hilo, que incluyen información del socket del cliente y el directorio del servidor.
+ * @return NULL siempre, para cumplir con la firma de una función de hilo.
+ * 
+ * @note La función utiliza un mutex para sincronizar el envío de datos a través del socket.
+ *       Si se produce algún error durante el proceso, se libera la memoria asignada y se envía 
+ *       un mensaje de error antes de salir.
+ */
 
 void* list_playlists_handler(void* args) {
     thread_args *t_args = (thread_args*)args;
@@ -398,6 +513,21 @@ void* list_playlists_handler(void* args) {
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Busca un archivo de canción por nombre en un directorio y sus subdirectorios de manera recursiva.
+ * 
+ * Abre el directorio especificado y busca el archivo de canción por nombre. Si encuentra un subdirectorio,
+ * realiza una búsqueda recursiva dentro de él. Si encuentra el archivo de canción, devuelve la ruta completa
+ * a este archivo.
+ * 
+ * @param basePath La ruta del directorio base donde comenzar la búsqueda.
+ * @param songName El nombre del archivo de la canción que se busca.
+ * @return Ruta completa al archivo de la canción si se encuentra, de lo contrario NULL.
+ * 
+ * @note Devuelve la primera ocurrencia del archivo de canción que coincide con el nombre dado.
+ *       La memoria para la ruta del archivo devuelto debe ser liberada por el llamador.
+ */
+
 char* searchSong(const char *basePath, const char *songName) {
     struct dirent *dp;
     DIR *dir = opendir(basePath);
@@ -435,6 +565,21 @@ char* searchSong(const char *basePath, const char *songName) {
     closedir(dir);
     return path;
 }
+
+/**
+ * @brief Busca un directorio por nombre en un directorio base y sus subdirectorios de manera recursiva.
+ * 
+ * Abre el directorio especificado y busca el directorio por nombre. Si encuentra un subdirectorio,
+ * realiza una búsqueda recursiva dentro de él. Si encuentra el directorio objetivo, devuelve la ruta completa
+ * a este directorio.
+ * 
+ * @param basePath La ruta del directorio base donde comenzar la búsqueda.
+ * @param folderName El nombre del directorio que se busca.
+ * @return Ruta completa al directorio si se encuentra, de lo contrario NULL.
+ * 
+ * @note Devuelve la primera ocurrencia del directorio que coincide con el nombre dado.
+ *       La memoria para la ruta del directorio devuelto debe ser liberada por el llamador.
+ */
 
 char* searchFolder(const char *basePath, const char *folderName) {
     struct dirent *dp;
@@ -482,6 +627,15 @@ char* searchFolder(const char *basePath, const char *folderName) {
     return path;
 }
 
+/**
+ * @brief Obtiene el tamaño de un archivo dado su ruta.
+ * 
+ * Utiliza la función 'stat' para obtener información del archivo en la ruta especificada,
+ * incluyendo su tamaño. Si la función 'stat' falla, muestra un mensaje de error.
+ * 
+ * @param filePath La ruta del archivo cuyo tamaño se desea obtener.
+ * @return El tamaño del archivo en bytes, o -1 si hay un error al obtener la información del archivo.
+ */
 off_t getFileSize(const char *filePath) {
     struct stat fileStat;
 
@@ -492,6 +646,21 @@ off_t getFileSize(const char *filePath) {
         return -1;
     }
 }
+
+/**
+ * @brief Maneja el envío de una canción o playlist a un cliente.
+ * 
+ * Esta función se encarga de buscar una canción o playlist específica en el servidor,
+ * calcular su tamaño y suma de verificación MD5, y enviar estos detalles al cliente.
+ * Utiliza mutex para sincronizar el acceso a recursos compartidos como sockets y pipes.
+ * Genera un identificador único para cada archivo enviado.
+ * 
+ * @param args Argumentos del hilo, incluyendo detalles de la canción o playlist y conexión del cliente.
+ * @return NULL siempre, para cumplir con la firma de una función de hilo.
+ * 
+ * @note La función libera la memoria asignada durante su ejecución antes de finalizar.
+ *       Si ocurre un error en cualquier punto, envía un mensaje de error y termina la ejecución del hilo.
+ */
 
 void* send_song(void * args){
     thread_args *t_args = (thread_args *)args;
@@ -572,6 +741,21 @@ void* send_song(void * args){
     pthread_exit(NULL);
 }
 
+/**
+ * @brief Envía todas las canciones de una lista de reproducción (playlist) a un cliente.
+ * 
+ * Esta función busca una lista de reproducción por nombre, y para cada canción en la lista,
+ * crea un nuevo hilo para manejar el envío de la canción al cliente. Utiliza 'pthread_create'
+ * para lanzar estos hilos y 'pthread_detach' para asegurar que los recursos de cada hilo se liberen
+ * automáticamente al finalizar.
+ * 
+ * @param args Argumentos del hilo, incluyendo detalles de la lista de reproducción y conexión del cliente.
+ * @return NULL siempre, para cumplir con la firma de una función de hilo.
+ * 
+ * @note En caso de error en la búsqueda de la lista de reproducción o la apertura del directorio,
+ *       la función termina antes de intentar enviar canciones.
+ *       Cada hilo creado es responsable de liberar su propia memoria asignada.
+ */
 void* send_list(void * args) {
     thread_args *t_args = (thread_args *)args;
 
@@ -646,6 +830,24 @@ void* send_list(void * args) {
     free(path);
     pthread_exit(NULL);
 }
+
+/**
+ * @brief Envía la canción mp3 en segmentos a un cliente a través de un socket.
+ * 
+ * Esta función abre el archivo especificado y lo envía en segmentos a través
+ * del socket del cliente. Utiliza un identificador único para cada segmento del archivo.
+ * La función se asegura de que cada segmento del archivo se envíe correctamente y maneja
+ * los errores de lectura y envío.
+ * 
+ * @param t_args Argumentos del hilo, incluyendo el socket del cliente y detalles del usuario.
+ * @param id Identificador único para el archivo que se envía.
+ * @param path Ruta del archivo a enviar.
+ * @param file_size Tamaño total del archivo a enviar.
+ * 
+ * @note La función se detiene si recibe una señal de interrupción o si encuentra un error
+ *       durante la lectura o el envío del archivo. Utiliza mutex para sincronizar el envío
+ *       a través del socket.
+ */
 
 void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
     char *id_char = intToStr(id);
@@ -737,6 +939,19 @@ void empezar_envio(thread_args t_args, int id, char* path, long file_size) {
     free(id_char);
 }
 
+/**
+ * @brief Envía una señal de apagado al cliente y espera su confirmación antes de cerrar la conexión.
+ * 
+ * Esta función crea y envía un frame de apagado al cliente a través del socket especificado. Luego,
+ * espera recibir una respuesta de confirmación del cliente. Si la respuesta es satisfactoria,
+ * procede a cerrar el socket. En caso de error en el envío o recepción del frame, muestra un mensaje
+ * de error y maneja el cierre del socket adecuadamente.
+ * 
+ * @param client_socket El socket del cliente al que se le envía la señal de apagado.
+ * 
+ * @note Utiliza un mutex para sincronizar el envío del frame de apagado.
+ *       Si la respuesta del cliente no es la esperada, termina el proceso con un error.
+ */
 void server_shutdown(int client_socket) {
     
     Frame shutdown_frame = frame_creator(0x06, "POOLE_SHUTDOWN", "");

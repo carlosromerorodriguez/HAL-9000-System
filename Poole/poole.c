@@ -143,6 +143,15 @@ int main(int argc, char** argv) {
     return (EXIT_SUCCESS);
 }
 
+/**
+ * @brief Inicia el servidor Monolit en un proceso separado utilizando un pipe para la comunicación.
+ * 
+ * 
+ * @note Maneja errores en la creación del pipe y la bifurcación del proceso.
+ *       Asegura que los extremos apropiados del pipe se cierren en ambos procesos.
+ *       En caso de error, finaliza el proceso con un estado de salida de error.
+ */
+
 void startMonolitServer(void) {
     int fd[2];
     if (pipe(fd) == -1) {
@@ -348,6 +357,15 @@ void kctrlc(int signum) {
     exit(EXIT_SUCCESS);
 }
 
+/**
+ * @brief Notifica al servidor Discovery sobre la desconexión del servidor Poole.
+ * 
+ * 
+ * @param config Configuración del servidor Poole, incluyendo la dirección IP y el puerto del servidor Discovery.
+ * @return EXIT_SUCCESS si la desconexión y la notificación se completan con éxito, de lo contrario EXIT_FAILURE.
+ * 
+ * @return EXIT_SUCCESS si la desconexión y la notificación se completan con éxito, de lo contrario EXIT_FAILURE.
+ */
 int disconnect_notification_to_discovery(const PooleConfig *config){
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {

@@ -2,6 +2,20 @@
 
 pthread_mutex_t write_file = PTHREAD_MUTEX_INITIALIZER; 
 
+/**
+ * @brief Actualiza las estadísticas de reproducción de una canción en un archivo.
+ * 
+ * Esta función abre y lee el archivo 'stats.txt', buscando una línea correspondiente
+ * al nombre de la canción proporcionado. Si encuentra la canción, incrementa su contador
+ * de reproducciones. Si la canción no está en el archivo, añade una nueva línea para ella.
+ * Utiliza un buffer dinámico para leer y modificar el archivo.
+ * 
+ * @param songName El nombre de la canción cuyas estadísticas se actualizarán o agregarán.
+ * 
+ * @note Maneja errores en la apertura del archivo, asignación de memoria y lectura del archivo.
+ *       Utiliza funciones de manipulación de strings y acceso a archivos para actualizar las estadísticas.
+ */
+
 void updateStatistics(const char *songName) {
     int fd = open("stats.txt", O_RDWR | O_CREAT, 0644);
     if (fd == -1) {
@@ -75,6 +89,20 @@ void updateStatistics(const char *songName) {
     close(fd);
 }
 
+/**
+ * @brief Lee datos de la pipe y los procesa en el servidor Monolit.
+ * 
+ * Esta función lee continuamente de un pipe especificado. Utiliza un buffer dinámico para
+ * acumular datos leídos del pipe. Una vez que se detecta el final de una cadena de datos,
+ * procesa estos datos (por ejemplo, actualizando estadísticas) y luego reinicia el buffer 
+ * para la siguiente lectura.
+ * 
+ * @param read_pipe El file descriptr de archivo del pipe desde el cual se leen los datos.
+ * 
+ * @note La función maneja errores de lectura y problemas de memoria. También utiliza un mutex
+ *       para sincronizar el acceso al archivo de estadísticas durante su actualización.
+ *       Termina la ejecución si se recibe una señal de interrupción.
+ */
 void throwMonolitServer(int read_pipe) {
     char *dynamicBuffer = NULL;
     size_t currentSize = 0;

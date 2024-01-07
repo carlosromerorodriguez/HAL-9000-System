@@ -14,8 +14,19 @@ extern int poole_thread_created;
 extern int bowman_thread_created;
 extern PooleServer* poole_servers_head;
 
+/**
+ * @brief Libera toda la memoria dinámica reservada en el programa
+ * 
+ * @return void
+*/
 void free_all_dynamic_memory(void);
 
+/**
+ * @brief Función que se ejecuta cuando se pulsa Ctrl+C
+ * 
+ * @param signum Señal que se ha recibido
+ * @return void
+*/
 void kctrlc(int signum);
 
 #endif // !UTILITIES_2_H
