@@ -161,8 +161,8 @@ void* startSongDownload(void* args) {
 
     //Comparar el md5sum de la canción descargada con el md5sum de la canción original
     char *newSongMD5 = getFileMD5(fullPath);
-    printF(RED, "MD5SUM Calculado: %s\n", newSongMD5);
-    printF(RED, "MD5SUM Que Deberia dar: %s\n", newSong.md5sum);
+    //printF(RED, "MD5SUM Calculado: %s\n", newSongMD5);
+    //printF(RED, "MD5SUM Que Deberia dar: %s\n", newSong.md5sum);
     if (newSongMD5 != NULL && strcmp(newSongMD5, newSong.md5sum) == 0) {
         //printF(GREEN, "\nDescarga completada: %s\n", newSong.fileName);
         free(newSongMD5);
