@@ -126,7 +126,7 @@ void parse_and_store_server_info(const char* server_info) {
         global_server_name = malloc(strlen(token) + 1); // Nombre del servidor
         strcpy(global_server_name, token);
         global_server_name[strlen(token)] = '\0';
-
+        
         token = strtok(NULL, "&");
     }
     if (token != NULL) {

@@ -65,6 +65,7 @@ void *receive_frames(void *args) {
                         
             if(!connect_to_another_server(trf.username, trf.discovery_ip, trf.discovery_port, trf.poole_socket, discovery_socket, poole_socket_for_bowman, msg_id, global_server_name, global_server_port, global_server_ip)) {
                 printF(RED, "Error connecting to another server. No Pooles available\n");
+                global_server_name = NULL;
                 bowman_is_connected = 0;
                 printF(WHITE, "$ ");
                 pthread_exit(NULL);
