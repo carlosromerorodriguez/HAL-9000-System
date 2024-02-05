@@ -24,17 +24,17 @@ Para ejecutar los componentes con Valgrind y analizar posibles fugas de memoria,
 1. **Ejecutar Discovery:**
     ```bash
     cd Discovery
-    valgrind --leak-check=full --show-leak-kinds=all -s --track-origins=yes ./discovery ../d.dat
+    valgrind --leak-check=full --show-leak-kinds=all --track-fds=yes -s --track-origins=yes ./discovery ../d.dat
 
 2. **Ejecutar Poole:**
     ```bash
     cd Poole
-    valgrind --leak-check=full --show-leak-kinds=all -s --track-origins=yes ./poole ../p.dat
+    valgrind --leak-check=full --show-leak-kinds=all --track-fds=yes -s --track-origins=yes ./poole ../p.dat
 
 3. **Ejecutar Bowman:**
     ```bash
     cd Bowman
-    valgrind --leak-check=full --show-leak-kinds=all -s --track-origins=yes ./bowman ../b.dat
+    valgrind --leak-check=full --show-leak-kinds=all --track-fds=yes -s --track-origins=yes ./bowman ../b.dat
 
 ## Información Adicional
 
